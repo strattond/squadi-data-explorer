@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "eeyore.yapf",
+    "ms-python.vscode-pylance",
+    "ms-python.python",
+    "ms-python.vscode-python-envs",
+    "ms-python.debugpy"
+  ]
+}
