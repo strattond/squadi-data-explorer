@@ -66,8 +66,10 @@ def calculateWinLoss( json, teamId ):
   return '-----'
 
 
-def processLadderData( div, ladders, json ):
+def processLadderData( div, json ):
+  global ladders
 
+  print( "Processing ladder for", div['name'] )
   table = []
   for team in json[ 'ladders' ]:
     table.append( {
@@ -91,22 +93,31 @@ def parseDateTime( stringValue ):
   return datetime.fromisoformat( stringValue.replace( "Z", "+00:00" ) )
 
 
+def localTime( dtUTC ):
+  return dtUTC.astimezone( timezone( timedelta( hours=10 ) ) )
+
+
+def displayTime( dtLocal ):
+  return dtLocal.strftime( "%a, %b %d %I:%M %p" )
+
+
 def createMatch( match, startTime ):
   return {
       'id': match[ 'id' ],
       'startTime': startTime,
+      'when': displayTime( localTime( startTime ) ),
       'homeId': match[ 'team1Id' ],
       'home': cleanTeam( match[ 'team1' ][ 'name' ] ),
       'goalsHome': match[ "team1Score" ],
       'awayId': match[ 'team2Id' ],
       'away': cleanTeam( match[ 'team2' ][ 'name' ] ),
       'goalsAway': match[ "team2Score" ],
-      'ground': (match[ 'venueCourt' ][ 'venue' ]['name'] + ' ' + match[ 'venueCourt' ][ 'name' ])
+      'ground': ( match[ 'venueCourt' ][ 'venue' ][ 'name' ] + ' ' + match[ 'venueCourt' ][ 'name' ] )
   }
 
 
-def processResultsData( div, results, json ):
-  global nexts, recents, now
+def processResultsData( div, json ):
+  global nexts, results, recents, now
 
   rounds = []
   for round in json[ 'rounds' ]:
@@ -115,14 +126,16 @@ def processResultsData( div, results, json ):
       if match[ "team1Id" ] == div[ 'teamId' ] or match[ 'team2Id' ] == div[ 'teamId' ]:
 
         startTime = parseDateTime( match[ 'startTime' ] )
+        # print( match[ 'id' ], startTime, now, match['matchStatus' ], (startTime > now), (now - startTime), (startTime < now), (startTime - now) )
+        #      866118 2026-06-05 09:30:00+00:00 2026-06-10 08:54:15.206473+00:00 None False 4 days, 23:24:15.206473 True -5 days, 0:35:44.793527
         if match[ 'matchStatus' ] == 'ENDED':
           # It's a match for our team, so let's store the result
           matches.append( createMatch( match, startTime ) )
-          
-          if (now - startTime ) <= timedelta( days=7 ):
+
+          if startTime < now and ( now - startTime ) <= timedelta( days=7 ):
             recents.append( { 'div': div, 'match': createMatch( match, startTime )} )
 
-        if match[ 'matchStatus' ] is None and ( startTime - now ) <= timedelta( days=7 ):
+        if match[ 'matchStatus' ] is None and startTime > now and ( startTime - now ) <= timedelta( days=7 ):
           nexts.append( { 'div': div, 'match': createMatch( match, startTime )} )
 
     if len( matches ) > 0:
@@ -130,20 +143,17 @@ def processResultsData( div, results, json ):
   results.append( { 'div': div, 'rounds': rounds} )
 
 
-def fetchDivisionLadderAndResults( div, ladders, results, p ):
+def fetchDivisionLadderAndResults( div, p ):
   # Capture the API response you care about
   ladderURL = f"{ladderRoot()}&divisionId={div['divisionId']}"
 
   def handle_response( response ):
     try:
       json = response.json()
-      #print( "API URL:", response.url )
-      apis.add( response.url )
-      #writeFile( json, response.url )
       if '/livescores/round/matches' in response.url:
-        processResultsData( div, results, json )
+        processResultsData( div, json )
       if '/livescores/teams/ladder/v2' in response.url:
-        processLadderData( div, ladders, json )
+        processLadderData( div, json )
     except:
       pass
       #print( "Non-JSON response" )
@@ -155,15 +165,17 @@ def fetchDivisionLadderAndResults( div, ladders, results, p ):
 
   # Wait for JS to finish loading
   page.wait_for_load_state( "networkidle" )
+  
+  page.close()
 
 
 with sync_playwright() as p:
   browser = p.chromium.launch( headless=True )
-  page = browser.new_page()
 
   for div in divisions:
     print( "Processing", div[ "name" ] )
-    fetchDivisionLadderAndResults( div, ladders, results, p )
+    page = browser.new_page()
+    fetchDivisionLadderAndResults( div, p )
 
   browser.close()
 
