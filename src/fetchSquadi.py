@@ -1,8 +1,15 @@
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 import re
 import json
+import argparse
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Page, Playwright, Response, sync_playwright
+
+parser = argparse.ArgumentParser()
+parser.add_argument( "--match", action="store_true", help="Run in match detail mode" )
+
+args = parser.parse_args()
 
 print( "Loading configuration" )
 with open( "data/config.json", "r" ) as f:
@@ -39,6 +46,8 @@ def matchRoot():
 
 ladders = []
 results = []
+matchDetails = []
+loadedMatchDetails = False
 nexts = []
 recents = []
 now = datetime.now( timezone.utc )
@@ -69,7 +78,7 @@ def calculateWinLoss( json, teamId ):
 def processLadderData( div, json ):
   global ladders
 
-  print( "Processing ladder for", div['name'] )
+  print( "Processing ladder for", div[ 'name' ] )
   table = []
   for team in json[ 'ladders' ]:
     table.append( {
@@ -143,18 +152,19 @@ def processResultsData( div, json ):
   results.append( { 'div': div, 'rounds': rounds} )
 
 
-def fetchDivisionLadderAndResults( div, p ):
+def fetchDivisionLadderAndResults( div, page: Page ):
   # Capture the API response you care about
   ladderURL = f"{ladderRoot()}&divisionId={div['divisionId']}"
 
-  def handle_response( response ):
+  def handle_response( response: Response ) -> None:
     try:
       json = response.json()
       if '/livescores/round/matches' in response.url:
         processResultsData( div, json )
       if '/livescores/teams/ladder/v2' in response.url:
         processLadderData( div, json )
-    except:
+    except Exception as e:
+      #print( f"How exceptional {e} type {type(e)}" )
       pass
       #print( "Non-JSON response" )
 
@@ -165,17 +175,69 @@ def fetchDivisionLadderAndResults( div, p ):
 
   # Wait for JS to finish loading
   page.wait_for_load_state( "networkidle" )
-  
+
   page.close()
 
+def pushBlankDiv( div ):
+  global matchDetails
+  added = { "div": div, "details": [] }
+  matchDetails.append( added )
+  return added['details']  
 
+def loadExistingDetails( div ):
+  global loadedMatchDetails, matchDetails
+  p = Path( "output/matchDetails.json" )
+  if not p.exists():
+    return pushBlankDiv( div )
+  if not loadedMatchDetails:
+    with open( 'output/matchDetails.json', 'r' ) as f:
+      matchDetails = json.load( f )
+    loadedMatchDetails = True
+
+  for i in matchDetails:
+    if i['div']['divisionId'] == div['divisionId']:
+      return i['details']
+
+  # If we get to this point, it didn't exist in the cached results, so add a blank one
+  return pushBlankDiv( div )
+
+def getDivResults( div ):
+  global results
+  for i in results:
+    if i['div']['divisionId'] == div['divisionId']:
+      return i
+
+  return None
+  
+
+def fetchNewDetails( div, p: Playwright, existing ):
+  global results
+  # So, we only care about results, and results -we don't already have-
+  divResults = getDivResults( div )
+  teamOfInterest = div['teamId']
+  if divResults is None:
+    return
+
+  # These are the divisional results we need answers for
+  for round in divResults['rounds' ]:
+    for m in round['matches']:
+      matchId = m['id']
+
+      # Firstly, let's see if we've fetched it - if we have, no need to process it!
+      
+      page = browser.new_page()
+      pass
+      
 with sync_playwright() as p:
   browser = p.chromium.launch( headless=True )
 
   for div in divisions:
     print( "Processing", div[ "name" ] )
     page = browser.new_page()
-    fetchDivisionLadderAndResults( div, p )
+    fetchDivisionLadderAndResults( div, page )
+    if args.match:
+      existing = loadExistingDetails( div )
+      fetchNewDetails( div, p, existing )
 
   browser.close()
 
@@ -200,3 +262,7 @@ with open( "output/next.json", "w" ) as f:
 
 with open( "output/recent.json", "w" ) as f:
   json.dump( recents, f, indent=2, ensure_ascii=False, default=default )
+
+if args.match:
+  with open( "output/matchDetails.json", "w" ) as f:
+    json.dump( matchDetails, f, indent=2, ensure_ascii=False, default=default )
