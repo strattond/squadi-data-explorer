@@ -1,10 +1,10 @@
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-import re
-import json
 import argparse
+import json
+import re
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from playwright.sync_api import Browser, Page, Playwright, Response, sync_playwright
+from playwright.sync_api import Browser, Page, Response, sync_playwright
 
 parser = argparse.ArgumentParser()
 parser.add_argument( "--match", action="store_true", help="Run in match detail mode" )
@@ -208,21 +208,22 @@ def getDivResults( div ):
 
   return None
 
+
 def calculateCards( cards ):
   if len( cards ) == 0:
     return ( 0, 0 )
 
   yellows = 0
   reds = 0
-# { "type": "Y1", "iconName": "YellowCard.png",    "value": 1, "count": 1 },
-# { "type": "R7", "iconName": "YellowRedCard.png", "value": 1, "count": 1 }
+  # { "type": "Y1", "iconName": "YellowCard.png",    "value": 1, "count": 1 },
+  # { "type": "R7", "iconName": "YellowRedCard.png", "value": 1, "count": 1 }
   for card in cards:
-    if 'Yellow' in card['iconName']:
-      yellows += card['count']
+    if 'Yellow' in card[ 'iconName' ]:
+      yellows += card[ 'count' ]
     else:
-      reds += card['count']
-    
-  return (yellows, reds)
+      reds += card[ 'count' ]
+
+  return ( yellows, reds )
 
 
 def processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json ):
@@ -231,7 +232,7 @@ def processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json ):
   for player in json[ 'playing' ]:
     if player[ 'teamId' ] == teamOfInterest:
       # Got a player to add!
-      yellows, reds = calculateCards( player['cards'] )
+      yellows, reds = calculateCards( player[ 'cards' ] )
       newPlayer = {
           "shirt": int( player[ 'shirt' ] ),
           "name": player[ 'firstName' ] + " " + player[ 'lastName' ],
@@ -244,6 +245,7 @@ def processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json ):
 
   existing.append( toAdd )
   anyFetched = True
+
 
 def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser ):
   with browser.new_page() as page:

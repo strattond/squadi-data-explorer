@@ -1,6 +1,7 @@
-import matplotlib.pyplot as plt
-import re
 import json
+import re
+
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -68,11 +69,9 @@ def highestRoundsInAnyDiv( player ):
 def accumulateStats( data ):
 
   player_stats = {}
-  cumRounds = maxMatches( data )
   for division in data:
     divName = division[ "div" ][ 'name' ]
-    matchNum = 0
-    for match in division.get( "matches", [] ):
+    for matchNum, match in enumerate( division.get( "matches", [] ) ):
       for player in match[ "match" ].get( "players", [] ):
         name = player[ "name" ]
         stats = player_stats.setdefault(
@@ -119,14 +118,11 @@ def accumulateStats( data ):
         divReds = stats[ "divReds" ].setdefault( divName, [] )
         divReds.append( roundReds )
         divFairPlay = stats[ "divFairPlay" ].setdefault( divName, [] )
-        divFairPlay.append( ( roundYellows + 2*roundReds ) )
+        divFairPlay.append( roundYellows + 2*roundReds )
 
-      matchNum += 1
-
-  for name in player_stats:
-    p = player_stats[ name ]
+  for name, p in player_stats.items():
     playerRounds = highestRoundsInAnyDiv( p )
-    for i in range( 0, playerRounds ):  # was cumRounds - 1
+    for i in range( playerRounds ):  # was cumRounds - 1
       goalsThisRound = 0
       yellowsThisRound = 0
       redsThisRound = 0
@@ -188,11 +184,11 @@ def plotStatsData( data, filename, sorted_stats, property, maxProp, labelY, titl
         label=name,
         color=color
     )
-  #
+
   cumRounds = maxMatches( data )
   rangeData = range( 1, cumRounds + 1 )
   maxStat = ( sorted_stats[ 0 ][ 1 ] )[ maxProp ]
-  maxStatRange = range( 0, maxStat + 1 )
+  maxStatRange = range( maxStat + 1 )
   ax.set_title( title, fontsize=320, color="white" )
   ax.set_xlabel( "Round", fontsize=56, color="white" )
   ax.set_ylabel( labelY, fontsize=56, color="white" )
@@ -202,9 +198,9 @@ def plotStatsData( data, filename, sorted_stats, property, maxProp, labelY, titl
   ax.set_xticks( rangeData )
   ax.set_xticklabels( [ str( r ) for r in rangeData ], fontsize=56 )
   ax.set_yticks( maxStatRange )
-  ax.set_yticklabels( maxStatRange, fontsize=56 )
+  ax.set_yticklabels( [ str( r ) for r in maxStatRange ], fontsize=56 )
   ax.tick_params( colors="white" )
-  #
+
   plt.tight_layout()
   plt.savefig( filename, dpi=100, transparent=True )
 
@@ -387,9 +383,8 @@ div10 = getDiv( data, 'Metro 10 South' )
 if div10 is not None:
   numRounds = len( div10[ 'matches' ] )
   playerMatrix = np.zeros( ( len( sorted10s ), numRounds ) )
-  i = 0
-  for p in sorted10s:
-    for r in range( 0, numRounds ):
+  for i, p in enumerate( sorted10s ):
+    for r in range( numRounds ):
       match = div10[ 'matches' ][ r ][ 'match' ]
       didPlay = False
       didStart = False
@@ -399,7 +394,6 @@ if div10 is not None:
           didStart = ( p2[ 'started' ] is not None and p2[ 'started' ] )
           break
       playerMatrix[ i, r ] = ( 2 if didStart else ( 1 if didPlay else 0 ) )
-    i += 1
 
   ## Marker colors for each state
   colors = { 0: "red", 1: "lightgreen", 2: "green"}
@@ -416,14 +410,14 @@ if div10 is not None:
   draw = ImageDraw.Draw( img )
 
   # Draw circles in each cell
-  for i in range( 0, numRounds ):
+  for i in range( numRounds ):
     x = leftMargin + i*cellW
     draw.text( ( x + cellW//4, 10 ), str( i + 1 ), fill="black" )
 
   for i, player in enumerate( sorted10s ):
     y = topMargin + i*cellH
     draw.text( ( 10, y + cellH//4 ), player[ 1 ][ 'name' ], fill="black" )
-    for j in range( 0, numRounds ):
+    for j in range( numRounds ):
       x = leftMargin + j*cellW
       state = playerMatrix[ i, j ]
 
