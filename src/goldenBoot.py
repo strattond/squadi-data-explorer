@@ -66,9 +66,14 @@ def highestRoundsInAnyDiv( player ):
   return max( len( player[ 'divGoals' ][ d ] ) for d in player[ 'divGoals' ] )
 
 
+def newEntryValue( stat, value ):
+  return np.nan_to_num( stat, nan=0.0 ) + value
+
+
 def accumulateStats( data ):
 
   player_stats = {}
+  maxRounds = maxMatches( data )
   for division in data:
     divName = division[ "div" ][ 'name' ]
     for matchNum, match in enumerate( division.get( "matches", [] ) ):
@@ -83,10 +88,10 @@ def accumulateStats( data ):
                 "reds": 0,
                 "fairPlay": 0,
                 "byDiv": {},  # divName -> count,
-                "runningGoals": [],
-                "runningYellows": [],
-                "runningReds": [],
-                "runningFairPlay": [],
+                "runningGoals": np.full( maxRounds, np.nan ),
+                "runningYellows": np.full( maxRounds, np.nan ),
+                "runningReds": np.full( maxRounds, np.nan ),
+                "runningFairPlay": np.full( maxRounds, np.nan ),
                 "divGoals": {},
                 "divYellows": {},
                 "divReds": {},
@@ -120,44 +125,10 @@ def accumulateStats( data ):
         divFairPlay = stats[ "divFairPlay" ].setdefault( divName, [] )
         divFairPlay.append( roundYellows + 2*roundReds )
 
-  for name, p in player_stats.items():
-    playerRounds = highestRoundsInAnyDiv( p )
-    for i in range( playerRounds ):  # was cumRounds - 1
-      goalsThisRound = 0
-      yellowsThisRound = 0
-      redsThisRound = 0
-      fairPlayThisRound = 0
-      anyGoals = False
-      anyCards = False
-      for division in data:
-        divName = division[ "div" ][ 'name' ]
-        if divName in p[ "divGoals" ]:
-          divArr = p[ "divGoals" ][ divName ]
-          divGoal = ( divArr[ i ] if i < len( divArr ) else 0 )
-          goalsThisRound += divGoal
-          anyGoals = True
-        if divName in p[ "divYellows" ]:
-          divArr = p[ "divYellows" ][ divName ]
-          divCard = ( divArr[ i ] if i < len( divArr ) else 0 )
-          yellowsThisRound += divCard
-          anyCards = True
-        if divName in p[ "divReds" ]:
-          divArr = p[ "divReds" ][ divName ]
-          divCard = ( divArr[ i ] if i < len( divArr ) else 0 )
-          redsThisRound += divCard
-          anyCards = True
-        if divName in p[ "divFairPlay" ]:
-          divArr = p[ "divFairPlay" ][ divName ]
-          divCard = ( divArr[ i ] if i < len( divArr ) else 0 )
-          fairPlayThisRound += divCard
-          anyCards = True
-
-      if anyGoals:
-        p[ "runningGoals" ].append( running( p[ "runningGoals" ], i, goalsThisRound ) )
-      if anyCards:
-        p[ "runningYellows" ].append( running( p[ "runningYellows" ], i, yellowsThisRound ) )
-        p[ "runningReds" ].append( running( p[ "runningReds" ], i, redsThisRound ) )
-        p[ "runningFairPlay" ].append( running( p[ "runningFairPlay" ], i, fairPlayThisRound ) )
+        stats[ 'runningGoals' ][ matchNum ] = newEntryValue( stats[ 'runningGoals' ][ matchNum ], roundGoals )
+        stats[ 'runningYellows' ][ matchNum ] = newEntryValue( stats[ 'runningYellows' ][ matchNum ], roundYellows )
+        stats[ 'runningReds' ][ matchNum ] = newEntryValue( stats[ 'runningReds' ][ matchNum ], roundReds )
+        stats[ 'runningFairPlay' ][ matchNum ] = newEntryValue( stats[ 'runningFairPlay' ][ matchNum ], roundYellows + 2*roundReds )
 
   return player_stats
 
@@ -169,18 +140,23 @@ def plotStatsData( data, filename, sorted_stats, property, maxProp, labelY, titl
   fig.patch.set_alpha( 0 )
   ax.patch.set_alpha( 0 )
 
+  cumRounds = maxMatches( data )
   for i, ( name, value ) in enumerate( sorted_stats ):
     jitter = i * 0.03
     color = ax._get_lines.get_next_color()
-    cumRounds = highestRoundsInAnyDiv( value )
+    # cumRounds = highestRoundsInAnyDiv( value )
     rangeData = range( 1, cumRounds + 1 )
+    cumulative = np.nancumsum( np.nan_to_num( value[ property ] ) )
+    cumulative[ np.isnan( value[ property ] ) ] = np.nan
+    if name == 'Alexander Dunn':
+      print( cumulative )
     if withStep:
-      ax.step( rangeData, [ g + jitter for g in value[ property ] ], where="post", linewidth=25, color=color )
+      ax.step( rangeData, [ g + jitter for g in cumulative ], where="post", linewidth=25, color=color )
     ax.plot(
-        rangeData, [ g + jitter for g in value[ property ] ],
+        rangeData, [ g + jitter for g in cumulative ],
         marker="o",
         markersize=50,
-        linewidth=25,
+        linewidth=15,
         label=name,
         color=color
     )
@@ -310,13 +286,9 @@ print( "Accumulating stats" )
 player_stats = accumulateStats( data )
 
 print( "Sorting by Goals" )
-topN = sorted(   # sorted_stats
-                      (
-                        (name, stats)
-                        for name, stats in player_stats.items()
-                        if stats['goals'] > 2
-                      ),
-                      key=lambda item: item[1]["goals"], reverse=True)
+topN = sorted( ( ( name, stats ) for name, stats in player_stats.items() if stats[ 'goals' ] > 2 ),
+               key=lambda item: item[ 1 ][ "goals" ],
+               reverse=True )
 
 topN = topN[ :10 ]
 
