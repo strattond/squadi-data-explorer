@@ -148,8 +148,6 @@ def plotStatsData( data, filename, sorted_stats, property, maxProp, labelY, titl
     rangeData = range( 1, cumRounds + 1 )
     cumulative = np.nancumsum( np.nan_to_num( value[ property ] ) )
     cumulative[ np.isnan( value[ property ] ) ] = np.nan
-    if name == 'Alexander Dunn':
-      print( cumulative )
     if withStep:
       ax.step( rangeData, [ g + jitter for g in cumulative ], where="post", linewidth=25, color=color )
     ax.plot(

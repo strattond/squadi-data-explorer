@@ -111,6 +111,10 @@ def displayTime( dtLocal ):
   return dtLocal.strftime( "%a, %b %d %I:%M %p" )
 
 
+def noDelimTime( dtLocal ):
+  return dtLocal.strftime( "%Y%m%d%H%M" )
+
+
 def createMatch( match, startTime ):
   return {
       'id': match[ 'id' ],
@@ -269,7 +273,7 @@ def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser 
 
 
 def fetchNewDetails( div, browser: Browser, existing ):
-  global results
+  global results, anyFetched
   # So, we only care about results, and results -we don't already have-
   divResults = getDivResults( div )
   teamOfInterest = div[ 'teamId' ]
@@ -289,6 +293,11 @@ def fetchNewDetails( div, browser: Browser, existing ):
         if int( eligible[ 'match' ][ 'id' ] ) == matchId:
           print( " .. Matched!" )
           alreadyDone = True
+          # But let's check ...
+          if 'date' not in eligible[ 'match' ]:
+            # Copy the date!
+            eligible[ 'match' ][ 'date' ] = noDelimTime( localTime( parseDateTime( m[ 'startTime' ] ) ) )
+            anyFetched = True
           break
 
       if alreadyDone:
