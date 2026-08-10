@@ -10,19 +10,6 @@ def figure_for_resolution( width_px, height_px, dpi=100 ):
   return plt.subplots( figsize=( width_px / dpi, height_px / dpi ), dpi=dpi )
 
 
-def running( prev_list, index, value ):
-  return value if index == 0 else prev_list[ index - 1 ] + value
-
-
-def cumulative( values ):
-  total = 0
-  out = []
-  for v in values:
-    total += v
-    out.append( total )
-  return out
-
-
 def uniquePlayers( data ):
   unique_players = set()
 
@@ -62,10 +49,6 @@ def maxMatches( data ):
   return max( len( d.get( "matches", [] ) ) for d in data )
 
 
-def highestRoundsInAnyDiv( player ):
-  return max( len( player[ 'divGoals' ][ d ] ) for d in player[ 'divGoals' ] )
-
-
 def newEntryValue( stat, value ):
   return np.nan_to_num( stat, nan=0.0 ) + value
 
@@ -88,10 +71,10 @@ def accumulateStats( data ):
                 "reds": 0,
                 "fairPlay": 0,
                 "byDiv": {},  # divName -> count,
-                "runningGoals": np.full( maxRounds, np.nan ),
-                "runningYellows": np.full( maxRounds, np.nan ),
-                "runningReds": np.full( maxRounds, np.nan ),
-                "runningFairPlay": np.full( maxRounds, np.nan ),
+                "roundGoals": np.full( maxRounds, np.nan ),
+                "roundYellows": np.full( maxRounds, np.nan ),
+                "roundReds": np.full( maxRounds, np.nan ),
+                "roundFairPlay": np.full( maxRounds, np.nan ),
                 "divGoals": {},
                 "divYellows": {},
                 "divReds": {},
@@ -125,10 +108,10 @@ def accumulateStats( data ):
         divFairPlay = stats[ "divFairPlay" ].setdefault( divName, [] )
         divFairPlay.append( roundYellows + 2*roundReds )
 
-        stats[ 'runningGoals' ][ matchNum ] = newEntryValue( stats[ 'runningGoals' ][ matchNum ], roundGoals )
-        stats[ 'runningYellows' ][ matchNum ] = newEntryValue( stats[ 'runningYellows' ][ matchNum ], roundYellows )
-        stats[ 'runningReds' ][ matchNum ] = newEntryValue( stats[ 'runningReds' ][ matchNum ], roundReds )
-        stats[ 'runningFairPlay' ][ matchNum ] = newEntryValue( stats[ 'runningFairPlay' ][ matchNum ], roundYellows + 2*roundReds )
+        stats[ 'roundGoals' ][ matchNum ] = newEntryValue( stats[ 'roundGoals' ][ matchNum ], roundGoals )
+        stats[ 'roundYellows' ][ matchNum ] = newEntryValue( stats[ 'roundYellows' ][ matchNum ], roundYellows )
+        stats[ 'roundReds' ][ matchNum ] = newEntryValue( stats[ 'roundReds' ][ matchNum ], roundReds )
+        stats[ 'roundFairPlay' ][ matchNum ] = newEntryValue( stats[ 'roundFairPlay' ][ matchNum ], roundYellows + 2*roundReds )
 
   return player_stats
 
@@ -144,20 +127,12 @@ def plotStatsData( data, filename, sorted_stats, property, maxProp, labelY, titl
   for i, ( name, value ) in enumerate( sorted_stats ):
     jitter = i * 0.03
     color = ax._get_lines.get_next_color()
-    # cumRounds = highestRoundsInAnyDiv( value )
     rangeData = range( 1, cumRounds + 1 )
     cumulative = np.nancumsum( np.nan_to_num( value[ property ] ) )
     cumulative[ np.isnan( value[ property ] ) ] = np.nan
     if withStep:
       ax.step( rangeData, [ g + jitter for g in cumulative ], where="post", linewidth=25, color=color )
-    ax.plot(
-        rangeData, [ g + jitter for g in cumulative ],
-        marker="o",
-        markersize=50,
-        linewidth=15,
-        label=name,
-        color=color
-    )
+    ax.plot( rangeData, [ g + jitter for g in cumulative ], marker="o", markersize=50, linewidth=15, label=name, color=color )
 
   cumRounds = maxMatches( data )
   rangeData = range( 1, cumRounds + 1 )
@@ -221,9 +196,12 @@ def getInfographicData( player_stats ):
   round_totals = [ 0 ] * cumRounds
 
   for stats in player_stats.values():
-    for i, g in enumerate( stats[ "runningGoals" ] ):
-      round_totals[ i ] += g - ( stats[ "runningGoals" ][ i - 1 ] if i > 0 else 0 )
+    for i, g in enumerate( stats[ "roundGoals" ] ):
+      if not np.isnan( g ):
+        round_totals[ i ] += g
+      #round_totals[ i ] += v - ( stats[ "runningGoals" ][ i - 1 ] if i > 0 else 0 )
 
+  print( round_totals )
   highest_round = max( range( cumRounds ), key=lambda i: round_totals[ i ] )
   highest_round_goals = round_totals[ highest_round ]
 
@@ -271,6 +249,36 @@ def getDiv( data, match ):
   return None
 
 
+def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str ):
+
+  cellW = 30
+  cellH = 20
+  leftMargin = 150
+  topMargin = 50
+
+  imgW = leftMargin + cellW * ( numCols+1 )
+  imgH = topMargin + cellH * ( numRows+1 )
+
+  img = Image.new( "RGB", ( imgW, imgH ), "white" )
+  draw = ImageDraw.Draw( img )
+
+  # Draw filled rectangles
+  for i in range( numCols ):
+    x = leftMargin + i*cellW
+    draw.text( ( x + cellW//4, 10 ), colLabels[ i ], fill="black" )
+
+  for i in range( numRows ):
+    y = topMargin + i*cellH
+    draw.text( ( 10, y + cellH//4 ), rowLabels[ i ], fill="black" )
+    for j in range( numCols ):
+      x = leftMargin + j*cellW
+      state = dataMatrix[ i, j ]
+      # Cell border
+      draw.rectangle( [ x, y, x + cellW, y + cellH ], outline="black", fill=colors[ state ] )
+
+  img.save( "plots/" + filename + ".png" )
+
+
 print( "Loading data" )
 with open( "output/matchDetails.json", "r" ) as f:
   data = json.load( f )
@@ -291,14 +299,14 @@ topN = sorted( ( ( name, stats ) for name, stats in player_stats.items() if stat
 topN = topN[ :10 ]
 
 print( "Plotting Golden Boot" )
-plotStatsData( data, "plots/golden_boot.png", topN, "runningGoals", "goals", "Goals", "Golden Boot Race" )
+plotStatsData( data, "plots/golden_boot.png", topN, "roundGoals", "goals", "Goals", "Golden Boot Race" )
 
 print( "Sorting by Fair Play" )
 sorted_stats = sorted( player_stats.items(), key=lambda item: item[ 1 ][ "fairPlay" ], reverse=True )
 topN = sorted_stats[ :5 ]
 
 print( "Plotting Golden Card" )
-plotStatsData( data, "plots/golden_card.png", topN, "runningYellows", "yellows", "Cards", "Golden Card Race" )
+plotStatsData( data, "plots/golden_card.png", topN, "roundYellows", "yellows", "Cards", "Golden Card Race" )
 
 infographic = getInfographicData( player_stats )
 
@@ -368,39 +376,9 @@ if div10 is not None:
   ## Marker colors for each state
   colors = { 0: "red", 1: "lightgreen", 2: "green"}
 
-  cellW = 30
-  cellH = 20
-  leftMargin = 150
-  topMargin = 50
+  colLabels = [ str( i + 1 ) for i in range( numRounds ) ]
+  rowLabels = [ player[ 1 ][ 'name' ] for i, player in enumerate( sorted10s ) ]
 
-  imgW = leftMargin + cellW * ( numRounds+1 )
-  imgH = topMargin + cellH * ( len( sorted10s ) + 1 )
-
-  img = Image.new( "RGB", ( imgW, imgH ), "white" )
-  draw = ImageDraw.Draw( img )
-
-  # Draw circles in each cell
-  for i in range( numRounds ):
-    x = leftMargin + i*cellW
-    draw.text( ( x + cellW//4, 10 ), str( i + 1 ), fill="black" )
-
-  for i, player in enumerate( sorted10s ):
-    y = topMargin + i*cellH
-    draw.text( ( 10, y + cellH//4 ), player[ 1 ][ 'name' ], fill="black" )
-    for j in range( numRounds ):
-      x = leftMargin + j*cellW
-      state = playerMatrix[ i, j ]
-
-      # Cell border
-      draw.rectangle( [ x, y, x + cellW, y + cellH ], outline="black", fill=colors[ state ] )
-
-      # Circle center
-      cx = x + cellW//2
-      cy = y + cellH//2
-      radius = 6
-
-      state = playerMatrix[ i ][ j ]
-
-  img.save( "plots/starts.png" )
+  drawColourChart( colors, numRounds, len( sorted10s ), colLabels, rowLabels, playerMatrix, "starts" )
 
 print( "Complete" )
