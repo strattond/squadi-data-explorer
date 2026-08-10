@@ -199,9 +199,7 @@ def getInfographicData( player_stats ):
     for i, g in enumerate( stats[ "roundGoals" ] ):
       if not np.isnan( g ):
         round_totals[ i ] += g
-      #round_totals[ i ] += v - ( stats[ "runningGoals" ][ i - 1 ] if i > 0 else 0 )
 
-  print( round_totals )
   highest_round = max( range( cumRounds ), key=lambda i: round_totals[ i ] )
   highest_round_goals = round_totals[ highest_round ]
 
@@ -231,6 +229,10 @@ def getInfographicData( player_stats ):
 
 def playerPrimaryDivision( stats ):
   return max( stats[ "byDiv" ], key=lambda div: stats[ "byDiv" ][ div ] )
+
+
+def playerPlayedInDivision( stats, div ):
+  return div in stats[ 'byDiv' ] and stats[ 'byDiv' ][ div ] > 0
 
 
 def calcPlayerBorrowStats( stats ):
@@ -317,7 +319,7 @@ print( "Calculating appearances" )
 rows = []
 filtered_players = { name: stats for name, stats in player_stats.items() if len( stats[ "byDiv" ] ) >= 2 }
 
-# But we onlny care about "borrowings".  And we can take the punt that a primary team is the one they've appeared in the most
+# But we only care about "borrowings".  And we can take the punt that a primary team is the one they've appeared in the most
 for name, stats in sorted(
     filtered_players.items(), key=lambda item: ( -totalBorrowings( item[ 1 ] ), naturalNameKey( item[ 0 ] ) )
 ):
@@ -339,46 +341,45 @@ for row in rows:
     print( str( value ).ljust( w ), end='' )
   print()
 
-div10players = { name: stats for name, stats in player_stats.items() if playerPrimaryDivision( stats ) == "Metro 10 South" }
+for div in divisions:
+  print( f"Calculating appearances for {div}" )
+  divPlayers = { name: stats for name, stats in player_stats.items() if playerPlayedInDivision( stats, div ) }
 
-sorted10s = sorted( div10players.items(), key=lambda item: item[ 1 ][ "starts" ] )
+  sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: item[ 1 ][ "starts" ] )
 
-rows = []
-for name, stats in sorted10s:
-  row = [ name, stats[ "byDiv" ][ 'Metro 10 South' ], stats[ 'starts' ] ]
-  rows.append( row )
+  rows = []
+  for name, stats in sortedDivPlayers:
+    row = [ name, stats[ "byDiv" ][ div ], stats[ 'starts' ] ]
+    rows.append( row )
 
-col_labels = [ "Player", "Appearances", "Starts" ]
-plotRowData( col_labels, rows, "plots/appearances.png", 640, 480, 2 )
+  col_labels = [ "Player", "Appearances", "Starts" ]
+  plotRowData( col_labels, rows, f"plots/appearances.{div}.png", 640, 480, 2 )
 
-print( col_labels[ 0 ].ljust( 24 ) + " " + str( col_labels[ 1 ] ).ljust( 12 ) + str( col_labels[ 2 ] ).ljust( 6 ) )
-for row in rows:
-  print( row[ 0 ].ljust( 24 ) + " " + str( row[ 1 ] ).ljust( 12 ) + str( row[ 2 ] ).ljust( 6 ) )
+  sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: item[ 1 ][ "name" ] )
+  playerNames = [ p[ 1 ][ 'name' ] for p in sortedDivPlayers ]
 
-sorted10s = sorted( div10players.items(), key=lambda item: item[ 1 ][ "name" ] )
-playerNames = [ p[ 1 ][ 'name' ] for p in sorted10s ]
-div10 = getDiv( data, 'Metro 10 South' )
-if div10 is not None:
-  numRounds = len( div10[ 'matches' ] )
-  playerMatrix = np.zeros( ( len( sorted10s ), numRounds ) )
-  for i, p in enumerate( sorted10s ):
-    for r in range( numRounds ):
-      match = div10[ 'matches' ][ r ][ 'match' ]
-      didPlay = False
-      didStart = False
-      for p2 in match[ 'players' ]:
-        if p[ 1 ][ 'name' ] == p2[ 'name' ]:
-          didPlay = True
-          didStart = ( p2[ 'started' ] is not None and p2[ 'started' ] )
-          break
-      playerMatrix[ i, r ] = ( 2 if didStart else ( 1 if didPlay else 0 ) )
+  divDetail = getDiv( data, div )
+  if divDetail is not None:
+    numRounds = len( divDetail[ 'matches' ] )
+    playerMatrix = np.zeros( ( len( sortedDivPlayers ), numRounds ) )
+    for i, p in enumerate( sortedDivPlayers ):
+      for r in range( numRounds ):
+        match = divDetail[ 'matches' ][ r ][ 'match' ]
+        didPlay = False
+        didStart = False
+        for p2 in match[ 'players' ]:
+          if p[ 1 ][ 'name' ] == p2[ 'name' ]:
+            didPlay = True
+            didStart = ( 'started' in p2 and p2[ 'started' ] is not None and p2[ 'started' ] )
+            break
+        playerMatrix[ i, r ] = ( 2 if didStart else ( 1 if didPlay else 0 ) )
 
-  ## Marker colors for each state
-  colors = { 0: "red", 1: "lightgreen", 2: "green"}
+    ## Marker colors for each state
+    colors = { 0: "red", 1: "lightgreen", 2: "green"}
 
-  colLabels = [ str( i + 1 ) for i in range( numRounds ) ]
-  rowLabels = [ player[ 1 ][ 'name' ] for i, player in enumerate( sorted10s ) ]
+    colLabels = [ str( i + 1 ) for i in range( numRounds ) ]
+    rowLabels = [ player[ 1 ][ 'name' ] for i, player in enumerate( sortedDivPlayers ) ]
 
-  drawColourChart( colors, numRounds, len( sorted10s ), colLabels, rowLabels, playerMatrix, "starts" )
+    drawColourChart( colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"starts.{div}" )
 
 print( "Complete" )
