@@ -27,6 +27,12 @@ def naturalDivKey( divName ):
   return int( m.group( 1 ) ) if m else float( 'inf' )
 
 
+def mixedDivKey( divName ):
+  # Extract leading integer (division number)
+  m = re.match( r"\D*(\d+)\D*", divName )
+  return int( m.group( 1 ) ) if m else float( 'inf' )
+
+
 def naturalNameKey( playerName ):
   # Extract names
   m = re.match( r"(\w+) (\w+)", playerName )
@@ -42,7 +48,7 @@ def sortedDivisions( data ):
   for division in data:
     all_divisions.add( division[ "div" ][ 'name' ] )
 
-  return sorted( all_divisions, key=naturalDivKey )
+  return sorted( all_divisions, key=mixedDivKey )
 
 
 def maxMatches( data ):
@@ -240,6 +246,10 @@ def calcPlayerBorrowStats( stats ):
   return { div: count for div, count in stats[ "byDiv" ].items() if div != primary }
 
 
+def calcPlayerStats( stats ):
+  return { div: count for div, count in stats[ "byDiv" ].items() }
+
+
 def totalBorrowings( stats ):
   return sum( calcPlayerBorrowStats( stats ).values() )
 
@@ -251,10 +261,10 @@ def getDiv( data, match ):
   return None
 
 
-def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str ):
+def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData ):
 
   cellW = 30
-  cellH = 20
+  cellH = 30
   leftMargin = 150
   topMargin = 50
 
@@ -274,26 +284,80 @@ def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLab
     draw.text( ( 10, y + cellH//4 ), rowLabels[ i ], fill="black" )
     for j in range( numCols ):
       x = leftMargin + j*cellW
-      state = dataMatrix[ i, j ]
-      # Cell border
-      draw.rectangle( [ x, y, x + cellW, y + cellH ], outline="black", fill=colors[ state ] )
+      state: int = dataMatrix[ i, j ]
+
+      played: bool = ( state & 1 ) == 1
+      started: bool = ( state & 2 ) == 2
+      yellows: bool = ( state & 4 ) == 4
+      reds: bool = ( state & 8 ) == 8
+      goals: bool = ( state & 16 ) == 16
+
+      # colors = { 0: "black", 1: "lightgreen", 2: "green", 3: 'yellow', 4: 'red' }
+      if not played:
+        draw.rectangle( [ x, y, x + cellW, y + cellH ], outline="black", fill=colors[ 0 ] )
+      elif not yellows and not reds:
+        # No cards, so a rectangle will do
+        plColor = 2 if started else 1
+        draw.rectangle( [ x, y, x + cellW, y + cellH ], outline="black", fill=colors[ plColor ] )
+      else:
+        plColor = 2 if started else 1
+        crdColor = 4 if reds else 3
+        tl = ( x, y )
+        tr = ( x + cellW, y )
+        bl = ( x, y + cellH )
+        br = ( x + cellW, y + cellH )
+        tri1 = [ tl, bl, tr ]
+        tri2 = [ br, bl, tr ]
+        draw.polygon( tri1, outline='black', fill=colors[ plColor ] )
+        draw.polygon( tri2, outline='black', fill=colors[ crdColor ] )
+
+      if goals:
+        wd = 16
+        football = Image.open("ball.png").convert("RGBA")
+        football_sm = football.resize( (wd, wd), Image.Resampling.LANCZOS )
+        img.paste( football_sm, ( x + (cellW - wd) // 2, y + (cellH - wd) // 2 ), football_sm )
+        #print( rowData[i][1]['divGoals'] )
 
   img.save( "plots/" + filename + ".png" )
+
+
+def calcAppearanceScore( player ) -> int:
+  if player is None:
+    # Can't score goals, can't get carded, can't start or appear
+    return 0
+  rVal: int = 1
+  # Bit 0 (1) - Played
+  # Bit 1 (2) - Started
+  # Bit 2 (4) - Yellows
+  # Bit 3 (8) - Reds
+  # Bit 4 (16) - Goals
+  # colors = { 0: "black", 1: "lightgreen", 2: "green", 3: 'yellow', 4: 'red' }
+  if 'reds' in player and player[ 'reds' ] is not None and player[ 'reds' ] > 0:
+    rVal |= 8
+  if 'yellows' in player and player[ 'yellows' ] is not None and player[ 'yellows' ] > 0:
+    rVal |= 4
+  if 'started' in player and player[ 'started' ] is not None and player[ 'started' ]:
+    rVal |= 2
+
+  if 'goals' in player and p2[ 'goals' ] is not None and player[ 'goals' ] > 0:
+    rVal |= 16
+
+  return rVal
 
 
 print( "Loading data" )
 with open( "output/matchDetails.json", "r" ) as f:
   data = json.load( f )
 
-print( "Getting unique players" )
+print( " .. Getting unique players" )
 players = uniquePlayers( data )
 
-print( "Getting divisions" )
+print( " .. Getting divisions" )
 divisions = sortedDivisions( data )
 print( "Accumulating stats" )
 player_stats = accumulateStats( data )
 
-print( "Sorting by Goals" )
+print( " .. Sorting by Goals" )
 topN = sorted( ( ( name, stats ) for name, stats in player_stats.items() if stats[ 'goals' ] > 2 ),
                key=lambda item: item[ 1 ][ "goals" ],
                reverse=True )
@@ -303,7 +367,7 @@ topN = topN[ :10 ]
 print( "Plotting Golden Boot" )
 plotStatsData( data, "plots/golden_boot.png", topN, "roundGoals", "goals", "Goals", "Golden Boot Race" )
 
-print( "Sorting by Fair Play" )
+print( " .. Sorting by Fair Play" )
 sorted_stats = sorted( player_stats.items(), key=lambda item: item[ 1 ][ "fairPlay" ], reverse=True )
 topN = sorted_stats[ :5 ]
 
@@ -315,7 +379,7 @@ infographic = getInfographicData( player_stats )
 with open( "data/stats.json", "w", encoding="utf-8" ) as f:
   json.dump( infographic, f, indent=2, ensure_ascii=False )
 
-print( "Calculating appearances" )
+print( "Calculating borrowings" )
 rows = []
 filtered_players = { name: stats for name, stats in player_stats.items() if len( stats[ "byDiv" ] ) >= 2 }
 
@@ -323,29 +387,24 @@ filtered_players = { name: stats for name, stats in player_stats.items() if len(
 for name, stats in sorted(
     filtered_players.items(), key=lambda item: ( -totalBorrowings( item[ 1 ] ), naturalNameKey( item[ 0 ] ) )
 ):
-  borrowedStats = calcPlayerBorrowStats( stats )
   totalBorrow = totalBorrowings( stats )
-  row = [ name, totalBorrow ] + [ borrowedStats.get( div, "" ) for div in divisions ] + [ stats[ "appearances" ] ]
   if totalBorrow > 1:
+    #borrowedStats = calcPlayerBorrowStats( stats )
+    playedStats = calcPlayerStats( stats )
+    row = [ name, totalBorrow ] + [ playedStats.get( div, "" ) for div in divisions ] + [ stats[ "appearances" ] ]
     rows.append( row )
 
 col_labels = [ "Player", "Borrowed" ] + divisions + [ "Total appearances" ]
 col_widths = [ 24, 12 ] + [ 20 ] * len( divisions ) + [ 12 ]
 plotRowData( col_labels, rows, "plots/borrowings.png", 1280, 960, 1, 72 )
 
-for label, w in zip( col_labels, col_widths ):
-  print( label.ljust( w ), end='' )
-print()
-for row in rows:
-  for value, w in zip( row, col_widths ):
-    print( str( value ).ljust( w ), end='' )
-  print()
-
+print( "Calculating appearances" )
 for div in divisions:
-  print( f"Calculating appearances for {div}" )
+  print( f" .. {div}" )
   divPlayers = { name: stats for name, stats in player_stats.items() if playerPlayedInDivision( stats, div ) }
 
-  sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: item[ 1 ][ "starts" ] )
+  #sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: item[ 1 ][ "starts" ] )
+  sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: ( -item[ 1 ][ "byDiv" ][ div ], item[ 0 ] ) )
 
   rows = []
   for name, stats in sortedDivPlayers:
@@ -353,7 +412,7 @@ for div in divisions:
     rows.append( row )
 
   col_labels = [ "Player", "Appearances", "Starts" ]
-  plotRowData( col_labels, rows, f"plots/appearances.{div}.png", 640, 480, 2 )
+  plotRowData( col_labels, rows, f"plots/teamList.{div}.png", 1280, ( 48 * ( len( rows ) + 1 ) ), 2 )
 
   sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: item[ 1 ][ "name" ] )
   playerNames = [ p[ 1 ][ 'name' ] for p in sortedDivPlayers ]
@@ -361,25 +420,23 @@ for div in divisions:
   divDetail = getDiv( data, div )
   if divDetail is not None:
     numRounds = len( divDetail[ 'matches' ] )
-    playerMatrix = np.zeros( ( len( sortedDivPlayers ), numRounds ) )
+    playerMatrix = np.zeros( ( len( sortedDivPlayers ), numRounds ), dtype=np.uint32 )
     for i, p in enumerate( sortedDivPlayers ):
       for r in range( numRounds ):
         match = divDetail[ 'matches' ][ r ][ 'match' ]
-        didPlay = False
-        didStart = False
+        matched = None
         for p2 in match[ 'players' ]:
           if p[ 1 ][ 'name' ] == p2[ 'name' ]:
-            didPlay = True
-            didStart = ( 'started' in p2 and p2[ 'started' ] is not None and p2[ 'started' ] )
+            matched = p2
             break
-        playerMatrix[ i, r ] = ( 2 if didStart else ( 1 if didPlay else 0 ) )
+        playerMatrix[ i, r ] = calcAppearanceScore( matched )
 
     ## Marker colors for each state
-    colors = { 0: "red", 1: "lightgreen", 2: "green"}
+    colors = { 0: "black", 1: "lightgreen", 2: "green", 3: 'yellow', 4: 'red'}
 
     colLabels = [ str( i + 1 ) for i in range( numRounds ) ]
     rowLabels = [ player[ 1 ][ 'name' ] for i, player in enumerate( sortedDivPlayers ) ]
 
-    drawColourChart( colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"starts.{div}" )
+    drawColourChart( colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"appearances.{div}", sortedDivPlayers )
 
 print( "Complete" )
