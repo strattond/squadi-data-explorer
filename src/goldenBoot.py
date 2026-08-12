@@ -3,7 +3,7 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 def figure_for_resolution( width_px, height_px, dpi=100 ):
@@ -59,6 +59,16 @@ def newEntryValue( stat, value ):
   return np.nan_to_num( stat, nan=0.0 ) + value
 
 
+def makeDivBlock( numRounds ):
+  return {
+      "appearances": 0,
+      "goals": np.full( numRounds, np.nan ),
+      "yellows": np.full( numRounds, np.nan ),
+      "reds": np.full( numRounds, np.nan ),
+      "fairPlay": np.full( numRounds, np.nan ),
+  }
+
+
 def accumulateStats( data ):
 
   player_stats = {}
@@ -76,22 +86,19 @@ def accumulateStats( data ):
                 "yellows": 0,
                 "reds": 0,
                 "fairPlay": 0,
-                "byDiv": {},  # divName -> count,
+                "div": {},  # divName -> count,
                 "roundGoals": np.full( maxRounds, np.nan ),
                 "roundYellows": np.full( maxRounds, np.nan ),
                 "roundReds": np.full( maxRounds, np.nan ),
                 "roundFairPlay": np.full( maxRounds, np.nan ),
-                "divGoals": {},
-                "divYellows": {},
-                "divReds": {},
-                "divFairPlay": {},
                 "starts": 0
             }
         )
 
         # appearances
         stats[ "appearances" ] += 1
-        stats[ "byDiv" ][ divName ] = ( stats[ "byDiv" ].get( divName, 0 ) + 1 )
+        divStats = stats[ 'div' ].setdefault( divName, makeDivBlock( maxRounds ) )
+        divStats[ 'appearances' ] += 1
 
         # goals/yellows/reds may not exist on this record
         roundGoals = player.get( "goals", 0 )
@@ -105,14 +112,10 @@ def accumulateStats( data ):
         stats[ "reds" ] += roundReds
         stats[ "fairPlay" ] += ( roundYellows + 2*roundReds )
 
-        divGoals = stats[ "divGoals" ].setdefault( divName, [] )
-        divGoals.append( roundGoals )
-        divYellows = stats[ "divYellows" ].setdefault( divName, [] )
-        divYellows.append( roundYellows )
-        divReds = stats[ "divReds" ].setdefault( divName, [] )
-        divReds.append( roundReds )
-        divFairPlay = stats[ "divFairPlay" ].setdefault( divName, [] )
-        divFairPlay.append( roundYellows + 2*roundReds )
+        divStats[ 'goals' ][ matchNum ] = roundGoals
+        divStats[ 'yellows' ][ matchNum ] = roundYellows
+        divStats[ 'reds' ][ matchNum ] = roundReds
+        divStats[ 'fairPlay' ][ matchNum ] = roundYellows + 2*roundReds
 
         stats[ 'roundGoals' ][ matchNum ] = newEntryValue( stats[ 'roundGoals' ][ matchNum ], roundGoals )
         stats[ 'roundYellows' ][ matchNum ] = newEntryValue( stats[ 'roundYellows' ][ matchNum ], roundYellows )
@@ -234,20 +237,20 @@ def getInfographicData( player_stats ):
 
 
 def playerPrimaryDivision( stats ):
-  return max( stats[ "byDiv" ], key=lambda div: stats[ "byDiv" ][ div ] )
+  return max( stats[ "div" ], key=lambda div: stats[ "div" ][ div ][ 'appearances' ] )
 
 
 def playerPlayedInDivision( stats, div ):
-  return div in stats[ 'byDiv' ] and stats[ 'byDiv' ][ div ] > 0
+  return div in stats[ 'div' ] and stats[ 'div' ][ div ][ 'appearances' ] > 0
 
 
 def calcPlayerBorrowStats( stats ):
   primary = playerPrimaryDivision( stats )
-  return { div: count for div, count in stats[ "byDiv" ].items() if div != primary }
+  return { div: count[ 'appearances' ] for div, count in stats[ "div" ].items() if div != primary }
 
 
 def calcPlayerStats( stats ):
-  return { div: count for div, count in stats[ "byDiv" ].items() }
+  return { div: count[ 'appearances' ] for div, count in stats[ "div" ].items() }
 
 
 def totalBorrowings( stats ):
@@ -261,11 +264,11 @@ def getDiv( data, match ):
   return None
 
 
-def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData ):
+def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData, div: str ):
 
-  cellW = 30
-  cellH = 30
-  leftMargin = 150
+  cellW = 40
+  cellH = 40
+  leftMargin = 200
   topMargin = 50
 
   imgW = leftMargin + cellW * ( numCols+1 )
@@ -273,15 +276,16 @@ def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLab
 
   img = Image.new( "RGB", ( imgW, imgH ), "white" )
   draw = ImageDraw.Draw( img )
+  font = ImageFont.load_default( size=cellH // 2 )
 
   # Draw filled rectangles
   for i in range( numCols ):
     x = leftMargin + i*cellW
-    draw.text( ( x + cellW//4, 10 ), colLabels[ i ], fill="black" )
+    draw.text( ( x + cellW//4, 10 ), colLabels[ i ], fill="black", font=font )
 
   for i in range( numRows ):
     y = topMargin + i*cellH
-    draw.text( ( 10, y + cellH//4 ), rowLabels[ i ], fill="black" )
+    draw.text( ( 10, y + cellH//4 ), rowLabels[ i ], fill="black", font=font )
     for j in range( numCols ):
       x = leftMargin + j*cellW
       state: int = dataMatrix[ i, j ]
@@ -313,10 +317,21 @@ def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLab
 
       if goals:
         wd = 16
-        football = Image.open("ball.png").convert("RGBA")
-        football_sm = football.resize( (wd, wd), Image.Resampling.LANCZOS )
-        img.paste( football_sm, ( x + (cellW - wd) // 2, y + (cellH - wd) // 2 ), football_sm )
-        #print( rowData[i][1]['divGoals'] )
+        football = Image.open( "ball.png" ).convert( "RGBA" )
+        football_sm = football.resize( ( wd, wd ), Image.Resampling.LANCZOS )
+        #print( rowData[i] )
+        nGoals = rowData[i][1]['div'][div]['goals'][j]
+        if not np.isnan( nGoals ) and nGoals > 1:
+          toDisp = str(int(nGoals))
+          bbox = draw.textbbox((0, 0), toDisp, font=font)
+          w = bbox[2] - bbox[0]
+          h = bbox[3] - bbox[1]
+          cx = x + ( cellW // 2 )
+          cy = y + ( cellH // 2 )
+          img.paste( football_sm, ( x + cellW // 8, y + ( cellH-wd ) // 2 ), football_sm )
+          draw.text( ( cx + cellW // 8, cy - h ), text=toDisp, fill='red', stroke_width=0.2, font=font )
+        else:
+          img.paste( football_sm, ( x + ( cellW-wd ) // 2, y + ( cellH-wd ) // 2 ), football_sm )
 
   img.save( "plots/" + filename + ".png" )
 
@@ -381,15 +396,13 @@ with open( "data/stats.json", "w", encoding="utf-8" ) as f:
 
 print( "Calculating borrowings" )
 rows = []
-filtered_players = { name: stats for name, stats in player_stats.items() if len( stats[ "byDiv" ] ) >= 2 }
-
+filtered_players = { name: stats for name, stats in player_stats.items() if len( stats[ "div" ] ) >= 2 }
 # But we only care about "borrowings".  And we can take the punt that a primary team is the one they've appeared in the most
 for name, stats in sorted(
     filtered_players.items(), key=lambda item: ( -totalBorrowings( item[ 1 ] ), naturalNameKey( item[ 0 ] ) )
 ):
   totalBorrow = totalBorrowings( stats )
   if totalBorrow > 1:
-    #borrowedStats = calcPlayerBorrowStats( stats )
     playedStats = calcPlayerStats( stats )
     row = [ name, totalBorrow ] + [ playedStats.get( div, "" ) for div in divisions ] + [ stats[ "appearances" ] ]
     rows.append( row )
@@ -403,12 +416,11 @@ for div in divisions:
   print( f" .. {div}" )
   divPlayers = { name: stats for name, stats in player_stats.items() if playerPlayedInDivision( stats, div ) }
 
-  #sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: item[ 1 ][ "starts" ] )
-  sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: ( -item[ 1 ][ "byDiv" ][ div ], item[ 0 ] ) )
+  sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: ( -item[ 1 ][ "div" ][ div ][ 'appearances' ], item[ 0 ] ) )
 
   rows = []
   for name, stats in sortedDivPlayers:
-    row = [ name, stats[ "byDiv" ][ div ], stats[ 'starts' ] ]
+    row = [ name, stats[ "div" ][ div ][ 'appearances' ], stats[ 'starts' ] ]
     rows.append( row )
 
   col_labels = [ "Player", "Appearances", "Starts" ]
@@ -437,6 +449,8 @@ for div in divisions:
     colLabels = [ str( i + 1 ) for i in range( numRounds ) ]
     rowLabels = [ player[ 1 ][ 'name' ] for i, player in enumerate( sortedDivPlayers ) ]
 
-    drawColourChart( colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"appearances.{div}", sortedDivPlayers )
+    drawColourChart(
+        colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"appearances.{div}", sortedDivPlayers, div
+    )
 
 print( "Complete" )
