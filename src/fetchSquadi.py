@@ -9,6 +9,7 @@ from playwright.sync_api import Browser, Page, Response, sync_playwright
 parser = argparse.ArgumentParser()
 parser.add_argument( "--match", action="store_true", help="Run in match detail mode" )
 parser.add_argument( "--summary", action="store_true", help="Run in division summary mode" )
+parser.add_argument( "--div", action="store_true", help="Run in division results mode" )
 
 args = parser.parse_args()
 
@@ -25,11 +26,23 @@ pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
 
 
 def cleanTeam( team ):
-  global pattern
   team = pattern.sub( "", team )
-  if team == 'Oxley United':
-    team = 'Oxley United FC'
   return team
+
+def sanitiseTeam( team ):
+  if team == 'Oxley United':
+    return 'Oxley United FC'
+  return team
+
+
+def cleanVenue( homeTeam, venue ):
+  rawPattern = f"(.+)\\({homeTeam}.*\\) (.+)"
+  pattern = re.compile( rawPattern )
+  match = pattern.match( venue )
+  if match is not None:
+    return match.group( 1 ).rstrip() + ", " + match.group( 2 )
+  else:
+    return venue
 
 
 def ladderRoot():
@@ -47,8 +60,10 @@ def matchRoot():
 
 ladders = []
 results = []
-matchDetails = []
+teamMatchDetails = []
+divMatchDetails = []
 loadedMatchDetails = False
+loadedDivMatchDetails = False
 nexts = []
 recents = []
 now = datetime.now( timezone.utc )
@@ -77,7 +92,6 @@ def calculateWinLoss( json, teamId ):
 
 
 def processLadderData( div, json ):
-  global ladders
 
   print( "Processing ladder for", div[ 'name' ] )
   table = []
@@ -85,7 +99,7 @@ def processLadderData( div, json ):
     table.append( {
         'teamId': team[ 'id' ],
         'Rank': int( team[ 'rk' ] ),
-        'Team': cleanTeam( team[ 'name' ] ),
+        'Team': sanitiseTeam( cleanTeam( team[ 'name' ] ) ),
         'GamesPlayed': int( team[ 'P' ] ),
         'GamesWon': int( team[ 'W' ] ),
         'GamesDrawn': int( team[ 'D' ] ),
@@ -121,17 +135,16 @@ def createMatch( match, startTime ):
       'startTime': startTime,
       'when': displayTime( localTime( startTime ) ),
       'homeId': match[ 'team1Id' ],
-      'home': cleanTeam( match[ 'team1' ][ 'name' ] ),
+      'home': sanitiseTeam( cleanTeam( match[ 'team1' ][ 'name' ] ) ),
       'goalsHome': match[ "team1Score" ],
       'awayId': match[ 'team2Id' ],
-      'away': cleanTeam( match[ 'team2' ][ 'name' ] ),
+      'away': sanitiseTeam( cleanTeam( match[ 'team2' ][ 'name' ] ) ),
       'goalsAway': match[ "team2Score" ],
-      'ground': ( match[ 'venueCourt' ][ 'venue' ][ 'name' ] + ' ' + match[ 'venueCourt' ][ 'name' ] )
+      'ground': cleanVenue( cleanTeam( match[ 'team1' ][ 'name' ] ), match[ 'venueCourt' ][ 'venue' ][ 'name' ] + ' ' + match[ 'venueCourt' ][ 'name' ] )
   }
 
 
 def processResultsData( div, json ):
-  global nexts, results, recents, now
 
   rounds = []
   for round in json[ 'rounds' ]:
@@ -155,6 +168,55 @@ def processResultsData( div, json ):
   results.append( { 'div': div, 'rounds': rounds} )
 
 
+def getMatchingRound( round, existing ):
+  global anyFetched
+
+  rid = round[ 'id' ]
+  for exRound in existing:
+    if exRound[ 'id' ] == rid:
+      return exRound
+
+  added = { "id": rid, "name": round[ 'name' ], "matches": []}
+  existing.append( added )
+  anyFetched = True
+  return added
+
+
+def getMatchingMatch( match, existing ):
+  rid = match[ 'id' ]
+  for exMatch in existing:
+    if exMatch[ 'id' ] == rid:
+      return exMatch
+
+  return None
+
+
+def processFullResultsData( div, json, existing ):
+  global anyFetched
+
+  # {
+  #     "rounds": [
+  #         {
+  #             "id": 114519,
+  #             "name": "Round 1",
+  #             "sequence": 0,
+  #             "competitionId": 1287,
+  #             "divisionId": 9189,
+  #             "matches": [
+
+  for fetchedRound in json[ 'rounds' ]:
+    matchingRound = getMatchingRound( fetchedRound, existing )
+    for fetchedMatch in fetchedRound[ 'matches' ]:
+      if fetchedMatch[ 'matchStatus' ] == 'ENDED':
+        matchingMatch = getMatchingMatch( fetchedMatch, matchingRound[ 'matches' ] )
+        if matchingMatch is None:
+
+          startTime = parseDateTime( fetchedMatch[ 'startTime' ] )
+          # It's a match for our team, so let's store the result
+          matchingRound[ 'matches' ].append( createMatch( fetchedMatch, startTime ) )
+          anyFetched = True
+
+
 def fetchDivisionLadderAndResults( div, page: Page ):
   # Capture the API response you care about
   ladderURL = f"{ladderRoot()}&divisionId={div['divisionId']}"
@@ -167,7 +229,7 @@ def fetchDivisionLadderAndResults( div, page: Page ):
       if '/livescores/teams/ladder/v2' in response.url:
         processLadderData( div, json )
     except Exception as e:
-      pass
+      print( e )
 
   page.on( "response", handle_response )
 
@@ -179,24 +241,50 @@ def fetchDivisionLadderAndResults( div, page: Page ):
 
 
 def pushBlankDiv( div ):
-  global matchDetails, anyFetched
+  global anyFetched
   added = { "div": div, "matches": []}
-  matchDetails.append( added )
+  teamMatchDetails.append( added )
   anyFetched = True
   return added[ 'matches' ]
 
 
+def pushBlankFullDiv( div ):
+  global anyFetched
+  added = { "div": div, "rounds": []}
+  divMatchDetails.append( added )
+  anyFetched = True
+  return added[ 'rounds' ]
+
+
+def loadFullExistingDetails( div ):
+  global divMatchDetails, loadedDivMatchDetails
+  p = Path( "output/divMatchDetails.json" )
+  if not p.exists():
+    return pushBlankFullDiv( div )
+  if not loadedDivMatchDetails:
+    with open( 'output/divMatchDetails.json', 'r' ) as f:
+      divMatchDetails = json.load( f )
+    loadedDivMatchDetails = True
+
+  for i in divMatchDetails:
+    if i[ 'div' ][ 'divisionId' ] == div[ 'divisionId' ]:
+      return i[ 'rounds' ]
+
+  # If we get to this point, it didn't exist in the cached results, so add a blank one
+  return pushBlankFullDiv( div )
+
+
 def loadExistingDetails( div ):
-  global loadedMatchDetails, matchDetails
+  global loadedMatchDetails, teamMatchDetails
   p = Path( "output/matchDetails.json" )
   if not p.exists():
     return pushBlankDiv( div )
   if not loadedMatchDetails:
     with open( 'output/matchDetails.json', 'r' ) as f:
-      matchDetails = json.load( f )
+      teamMatchDetails = json.load( f )
     loadedMatchDetails = True
 
-  for i in matchDetails:
+  for i in teamMatchDetails:
     if i[ 'div' ][ 'divisionId' ] == div[ 'divisionId' ]:
       return i[ 'matches' ]
 
@@ -205,7 +293,6 @@ def loadExistingDetails( div ):
 
 
 def getDivResults( div ):
-  global results
   for i in results:
     if i[ 'div' ][ 'divisionId' ] == div[ 'divisionId' ]:
       return i
@@ -261,7 +348,7 @@ def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser 
         if '/gameSummary' in response.url:
           processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json )
       except Exception as e:
-        pass
+        print( e )
 
     page.on( "response", handle_response )
 
@@ -273,7 +360,7 @@ def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser 
 
 
 def fetchNewDetails( div, browser: Browser, existing ):
-  global results, anyFetched
+  global anyFetched
   # So, we only care about results, and results -we don't already have-
   divResults = getDivResults( div )
   teamOfInterest = div[ 'teamId' ]
@@ -307,6 +394,30 @@ def fetchNewDetails( div, browser: Browser, existing ):
       fetchMatchDetails( div, matchId, teamOfInterest, existing, browser )
 
 
+def fetchDivNewDetails( div, browser: Browser, existing ):
+  # So, we only care about results, and results -we don't already have-
+  resultsURL = f"{teamFixtureRoot()}&divisionId={div['divisionId']}"
+
+  with browser.new_page() as page:
+
+    def handle_response( response: Response ) -> None:
+      try:
+        json = response.json()
+        # https://api.squadi.com/livescores/round/matches?competitionId=1287&divisionId=9189&teamIds=&ignoreStatuses=[1]
+        if '/livescores/round/matches' in response.url:
+          processFullResultsData( div, json, existing )
+      except Exception as e:
+        pass
+
+    page.on( "response", handle_response )
+
+    # Load the page normally
+    page.goto( resultsURL )
+
+    # Wait for JS to finish loading
+    page.wait_for_load_state( "networkidle" )
+
+
 if args.match:
   print( "Loading existing data" )
   with open( "output/ladder.json", "r" ) as f:
@@ -332,6 +443,9 @@ with sync_playwright() as p:
     if args.match:
       existing = loadExistingDetails( div )
       fetchNewDetails( div, browser, existing )
+    if args.div:
+      existing = loadFullExistingDetails( div )
+      fetchDivNewDetails( div, browser, existing )
 
   browser.close()
 
@@ -357,4 +471,8 @@ if args.summary:
 
 if args.match and anyFetched:
   with open( "output/matchDetails.json", "w" ) as f:
-    json.dump( matchDetails, f, indent=2, ensure_ascii=False, default=default )
+    json.dump( teamMatchDetails, f, indent=2, ensure_ascii=False, default=default )
+
+if args.div:
+  with open( "output/divMatchDetails.json", "w" ) as f:
+    json.dump( divMatchDetails, f, indent=2, ensure_ascii=False, default=default )

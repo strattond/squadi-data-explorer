@@ -1,0 +1,39 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [    
+        {
+            "name": "Fetch - Division Results",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/fetchSquadi.py",
+            "console": "integratedTerminal",
+            "args": "--div"
+        },
+        {
+            "name": "Fetch - Summary",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/fetchSquadi.py",
+            "console": "integratedTerminal",
+            "args": "--summary"
+        },
+        {
+            "name": "Fetch - Team Results",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/fetchSquadi.py",
+            "console": "integratedTerminal",
+            "args": "--match"
+        },
+        {
+            "name": "Statistics stuff",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/goldenBoot.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}
