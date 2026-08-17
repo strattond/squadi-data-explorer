@@ -1,15 +1,20 @@
 import argparse
 import json
+import os
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from playwright.sync_api import Browser, Page, Response, sync_playwright
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(
+    prog="Squadi Parser", description="Parses data from squadi into JSON format for further processing"
+)
 parser.add_argument( "--match", action="store_true", help="Run in match detail mode" )
 parser.add_argument( "--summary", action="store_true", help="Run in division summary mode" )
 parser.add_argument( "--div", action="store_true", help="Run in division results mode" )
+parser.add_argument( "--year", help="The competition year of interest", type=int )
 
 args = parser.parse_args()
 
@@ -17,10 +22,25 @@ print( "Loading configuration" )
 with open( "data/config.json", "r" ) as f:
   config = json.load( f )
 
-print( "Starting our squadi fetch" )
+print( f"Starting our squadi fetch for year {args.year}" )
 
-orgSetup = config[ 'organisation' ]
-divisions = config[ 'divisions' ]
+configMatch = None
+for comp in config:
+  if comp[ 'organisation' ][ 'yearId' ] == args.year:
+    configMatch = comp
+    break
+
+if configMatch is None:
+  print( "Please provide a valid configuration year" )
+  sys.exit( 1 )
+
+outputBase = f"output/{configMatch['organisation']['yearId']}"
+outputFolder = Path( outputBase )
+if not outputFolder.exists():
+  os.makedirs( outputFolder )
+
+orgSetup = configMatch[ 'organisation' ]
+divisions = configMatch[ 'divisions' ]
 
 pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
 
@@ -28,6 +48,7 @@ pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
 def cleanTeam( team ):
   team = pattern.sub( "", team )
   return team
+
 
 def sanitiseTeam( team ):
   if team == 'Oxley United':
@@ -73,7 +94,7 @@ anyFetched = False
 
 def writeFile( jsonData, url ):
   global fileNum
-  filename = f"output/f{fileNum}.json"
+  filename = f"{outputBase}/f{fileNum}.json"
   print( f"Saving JSON to {filename}" )
   with open( filename, "w" ) as f:
     json.dump( { "url": url, "data": jsonData}, f, indent=2, ensure_ascii=False )
@@ -131,16 +152,29 @@ def noDelimTime( dtLocal ):
 
 def createMatch( match, startTime ):
   return {
-      'id': match[ 'id' ],
-      'startTime': startTime,
-      'when': displayTime( localTime( startTime ) ),
-      'homeId': match[ 'team1Id' ],
-      'home': sanitiseTeam( cleanTeam( match[ 'team1' ][ 'name' ] ) ),
-      'goalsHome': match[ "team1Score" ],
-      'awayId': match[ 'team2Id' ],
-      'away': sanitiseTeam( cleanTeam( match[ 'team2' ][ 'name' ] ) ),
-      'goalsAway': match[ "team2Score" ],
-      'ground': cleanVenue( cleanTeam( match[ 'team1' ][ 'name' ] ), match[ 'venueCourt' ][ 'venue' ][ 'name' ] + ' ' + match[ 'venueCourt' ][ 'name' ] )
+      'id':
+          match[ 'id' ],
+      'startTime':
+          startTime,
+      'when':
+          displayTime( localTime( startTime ) ),
+      'homeId':
+          match[ 'team1Id' ],
+      'home':
+          sanitiseTeam( cleanTeam( match[ 'team1' ][ 'name' ] ) ),
+      'goalsHome':
+          match[ "team1Score" ],
+      'awayId':
+          match[ 'team2Id' ],
+      'away':
+          sanitiseTeam( cleanTeam( match[ 'team2' ][ 'name' ] ) ),
+      'goalsAway':
+          match[ "team2Score" ],
+      'ground':
+          cleanVenue(
+              cleanTeam( match[ 'team1' ][ 'name' ] ),
+              match[ 'venueCourt' ][ 'venue' ][ 'name' ] + ' ' + match[ 'venueCourt' ][ 'name' ]
+          )
   }
 
 
@@ -177,6 +211,7 @@ def getMatchingRound( round, existing ):
       return exRound
 
   added = { "id": rid, "name": round[ 'name' ], "matches": []}
+  print( f" .. Creating round {round['name']}" )
   existing.append( added )
   anyFetched = True
   return added
@@ -194,16 +229,6 @@ def getMatchingMatch( match, existing ):
 def processFullResultsData( div, json, existing ):
   global anyFetched
 
-  # {
-  #     "rounds": [
-  #         {
-  #             "id": 114519,
-  #             "name": "Round 1",
-  #             "sequence": 0,
-  #             "competitionId": 1287,
-  #             "divisionId": 9189,
-  #             "matches": [
-
   for fetchedRound in json[ 'rounds' ]:
     matchingRound = getMatchingRound( fetchedRound, existing )
     for fetchedMatch in fetchedRound[ 'matches' ]:
@@ -215,6 +240,9 @@ def processFullResultsData( div, json, existing ):
           # It's a match for our team, so let's store the result
           matchingRound[ 'matches' ].append( createMatch( fetchedMatch, startTime ) )
           anyFetched = True
+          print( f"   .. Adding {fetchedMatch['id']}" )
+        #else:
+        #  print( f"   .. Matched {fetchedMatch['id']}" )
 
 
 def fetchDivisionLadderAndResults( div, page: Page ):
@@ -228,8 +256,8 @@ def fetchDivisionLadderAndResults( div, page: Page ):
         processResultsData( div, json )
       if '/livescores/teams/ladder/v2' in response.url:
         processLadderData( div, json )
-    except Exception as e:
-      print( e )
+    except Exception:
+      pass
 
   page.on( "response", handle_response )
 
@@ -258,11 +286,11 @@ def pushBlankFullDiv( div ):
 
 def loadFullExistingDetails( div ):
   global divMatchDetails, loadedDivMatchDetails
-  p = Path( "output/divMatchDetails.json" )
+  p = Path( f"{outputBase}/divMatchDetails.json" )
   if not p.exists():
     return pushBlankFullDiv( div )
   if not loadedDivMatchDetails:
-    with open( 'output/divMatchDetails.json', 'r' ) as f:
+    with open( f"{outputBase}/divMatchDetails.json", 'r' ) as f:
       divMatchDetails = json.load( f )
     loadedDivMatchDetails = True
 
@@ -276,11 +304,11 @@ def loadFullExistingDetails( div ):
 
 def loadExistingDetails( div ):
   global loadedMatchDetails, teamMatchDetails
-  p = Path( "output/matchDetails.json" )
+  p = Path( f"{outputBase}/matchDetails.json" )
   if not p.exists():
     return pushBlankDiv( div )
   if not loadedMatchDetails:
-    with open( 'output/matchDetails.json', 'r' ) as f:
+    with open( f"{outputBase}/matchDetails.json", 'r' ) as f:
       teamMatchDetails = json.load( f )
     loadedMatchDetails = True
 
@@ -347,8 +375,8 @@ def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser 
         json = response.json()
         if '/gameSummary' in response.url:
           processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json )
-      except Exception as e:
-        print( e )
+      except Exception:
+        pass
 
     page.on( "response", handle_response )
 
@@ -406,7 +434,7 @@ def fetchDivNewDetails( div, browser: Browser, existing ):
         # https://api.squadi.com/livescores/round/matches?competitionId=1287&divisionId=9189&teamIds=&ignoreStatuses=[1]
         if '/livescores/round/matches' in response.url:
           processFullResultsData( div, json, existing )
-      except Exception as e:
+      except Exception:
         pass
 
     page.on( "response", handle_response )
@@ -420,16 +448,16 @@ def fetchDivNewDetails( div, browser: Browser, existing ):
 
 if args.match:
   print( "Loading existing data" )
-  with open( "output/ladder.json", "r" ) as f:
+  with open( f"{outputBase}/ladder.json", "r" ) as f:
     ladders = json.load( f )
 
-  with open( "output/results.json", "r" ) as f:
+  with open( f"{outputBase}/results.json", "r" ) as f:
     results = json.load( f )
 
-  with open( "output/next.json", "r" ) as f:
+  with open( f"{outputBase}/next.json", "r" ) as f:
     nexts = json.load( f )
 
-  with open( "output/recent.json", "r" ) as f:
+  with open( f"{outputBase}/recent.json", "r" ) as f:
     recents = json.load( f )
 
 with sync_playwright() as p:
@@ -457,22 +485,22 @@ def default( o ):
 
 
 if args.summary:
-  with open( "output/ladder.json", "w" ) as f:
+  with open( f"{outputBase}/ladder.json", "w" ) as f:
     json.dump( ladders, f, indent=2, ensure_ascii=False )
 
-  with open( "output/results.json", "w" ) as f:
+  with open( f"{outputBase}/results.json", "w" ) as f:
     json.dump( results, f, indent=2, ensure_ascii=False, default=default )
 
-  with open( "output/next.json", "w" ) as f:
+  with open( f"{outputBase}/next.json", "w" ) as f:
     json.dump( nexts, f, indent=2, ensure_ascii=False, default=default )
 
-  with open( "output/recent.json", "w" ) as f:
+  with open( f"{outputBase}/recent.json", "w" ) as f:
     json.dump( recents, f, indent=2, ensure_ascii=False, default=default )
 
 if args.match and anyFetched:
-  with open( "output/matchDetails.json", "w" ) as f:
+  with open( f"{outputBase}/matchDetails.json", "w" ) as f:
     json.dump( teamMatchDetails, f, indent=2, ensure_ascii=False, default=default )
 
 if args.div:
-  with open( "output/divMatchDetails.json", "w" ) as f:
+  with open( f"{outputBase}/divMatchDetails.json", "w" ) as f:
     json.dump( divMatchDetails, f, indent=2, ensure_ascii=False, default=default )

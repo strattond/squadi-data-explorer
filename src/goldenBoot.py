@@ -1,5 +1,9 @@
+import argparse
 import json
+import os
 import re
+import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -183,7 +187,7 @@ def plotRowData( col_labels, rows, filename, width=3000, height=2000, vScale=4, 
     cell.set_edgecolor( "none" )
     # Left-align the Player column (column index 0)
     if col == 0:  # first column
-      cell.get_text().set_ha( "left" )
+      cell.get_text().set_horizontalalignment( "left" )
       cell.set_text_props( ha="left" )
 
   table.auto_set_font_size( True )
@@ -264,7 +268,9 @@ def getDiv( data, match ):
   return None
 
 
-def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData, div: str ):
+def drawColourChart(
+    colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData, div: str
+):
 
   cellW = 40
   cellH = 40
@@ -320,20 +326,19 @@ def drawColourChart( colors, numCols: int, numRows: int, colLabels: list, rowLab
         football = Image.open( "ball.png" ).convert( "RGBA" )
         football_sm = football.resize( ( wd, wd ), Image.Resampling.LANCZOS )
         #print( rowData[i] )
-        nGoals = rowData[i][1]['div'][div]['goals'][j]
+        nGoals = rowData[ i ][ 1 ][ 'div' ][ div ][ 'goals' ][ j ]
         if not np.isnan( nGoals ) and nGoals > 1:
-          toDisp = str(int(nGoals))
-          bbox = draw.textbbox((0, 0), toDisp, font=font)
-          w = bbox[2] - bbox[0]
-          h = bbox[3] - bbox[1]
-          cx = x + ( cellW // 2 )
-          cy = y + ( cellH // 2 )
-          img.paste( football_sm, ( x + cellW // 8, y + ( cellH-wd ) // 2 ), football_sm )
-          draw.text( ( cx + cellW // 8, cy - h ), text=toDisp, fill='red', stroke_width=0.2, font=font )
+          toDisp = str( int( nGoals ) )
+          bbox = draw.textbbox( ( 0, 0 ), toDisp, font=font )
+          h = bbox[ 3 ] - bbox[ 1 ]
+          cx = x + ( cellW//2 )
+          cy = y + ( cellH//2 )
+          img.paste( football_sm, ( x + cellW//8, y + ( cellH-wd ) // 2 ), football_sm )
+          draw.text( ( cx + cellW//8, cy - h ), text=toDisp, fill='red', stroke_width=0.2, font=font )
         else:
           img.paste( football_sm, ( x + ( cellW-wd ) // 2, y + ( cellH-wd ) // 2 ), football_sm )
 
-  img.save( "plots/" + filename + ".png" )
+  img.save( f"{plotBase}/{filename}.png" )
 
 
 def calcAppearanceScore( player ) -> int:
@@ -350,7 +355,10 @@ def calcAppearanceScore( player ) -> int:
   if 'reds' in player and player[ 'reds' ] is not None and player[ 'reds' ] > 0:
     rVal |= 8
   if 'yellows' in player and player[ 'yellows' ] is not None and player[ 'yellows' ] > 0:
-    rVal |= 4
+    if player[ 'yellows' ] > 1:
+      rVal |= 8
+    else:
+      rVal |= 4
   if 'started' in player and player[ 'started' ] is not None and player[ 'started' ]:
     rVal |= 2
 
@@ -360,8 +368,42 @@ def calcAppearanceScore( player ) -> int:
   return rVal
 
 
+parser = argparse.ArgumentParser(
+    prog="Squadi Stats Processor", description="Processes stats data previously retrieved from Squadi"
+)
+parser.add_argument( "--year", help="The competition year of interest", type=int )
+
+args = parser.parse_args()
+
+print( "Loading configuration" )
+with open( "data/config.json", "r" ) as f:
+  config = json.load( f )
+
+print( f"Starting our squadi stats processing for year {args.year}" )
+
+configMatch = None
+for comp in config:
+  if comp[ 'organisation' ][ 'yearId' ] == args.year:
+    configMatch = comp
+    break
+
+if configMatch is None:
+  print( "Please provide a valid configuration year" )
+  sys.exit( 1 )
+
+outputBase = f"output/{configMatch['organisation']['yearId']}"
+plotBase = f"plots/{configMatch['organisation']['yearId']}"
+outputFolder = Path( outputBase )
+if not outputFolder.exists():
+  print( "Please retrieve Squadi data first" )
+  sys.exit( 1 )
+
+plotFolder = Path( plotBase )
+if not plotFolder.exists():
+  os.makedirs( plotFolder )
+
 print( "Loading data" )
-with open( "output/matchDetails.json", "r" ) as f:
+with open( f"{outputBase}/matchDetails.json", "r" ) as f:
   data = json.load( f )
 
 print( " .. Getting unique players" )
@@ -380,18 +422,18 @@ topN = sorted( ( ( name, stats ) for name, stats in player_stats.items() if stat
 topN = topN[ :10 ]
 
 print( "Plotting Golden Boot" )
-plotStatsData( data, "plots/golden_boot.png", topN, "roundGoals", "goals", "Goals", "Golden Boot Race" )
+plotStatsData( data, f"{plotBase}/golden_boot.png", topN, "roundGoals", "goals", "Goals", "Golden Boot Race" )
 
 print( " .. Sorting by Fair Play" )
 sorted_stats = sorted( player_stats.items(), key=lambda item: item[ 1 ][ "fairPlay" ], reverse=True )
 topN = sorted_stats[ :5 ]
 
 print( "Plotting Golden Card" )
-plotStatsData( data, "plots/golden_card.png", topN, "roundYellows", "yellows", "Cards", "Golden Card Race" )
+plotStatsData( data, f"{plotBase}/golden_card.png", topN, "roundYellows", "yellows", "Cards", "Golden Card Race" )
 
 infographic = getInfographicData( player_stats )
 
-with open( "data/stats.json", "w", encoding="utf-8" ) as f:
+with open( f"{outputBase}/stats.json", "w", encoding="utf-8" ) as f:
   json.dump( infographic, f, indent=2, ensure_ascii=False )
 
 print( "Calculating borrowings" )
@@ -409,7 +451,7 @@ for name, stats in sorted(
 
 col_labels = [ "Player", "Borrowed" ] + divisions + [ "Total appearances" ]
 col_widths = [ 24, 12 ] + [ 20 ] * len( divisions ) + [ 12 ]
-plotRowData( col_labels, rows, "plots/borrowings.png", 1280, 960, 1, 72 )
+plotRowData( col_labels, rows, f"{plotBase}/borrowings.png", 1280, 960, 1, 72 )
 
 print( "Calculating appearances" )
 for div in divisions:
@@ -424,7 +466,7 @@ for div in divisions:
     rows.append( row )
 
   col_labels = [ "Player", "Appearances", "Starts" ]
-  plotRowData( col_labels, rows, f"plots/teamList.{div}.png", 1280, ( 48 * ( len( rows ) + 1 ) ), 2 )
+  plotRowData( col_labels, rows, f"{plotBase}/teamList.{div}.png", 1280, ( 48 * ( len( rows ) + 1 ) ), 2 )
 
   sortedDivPlayers = sorted( divPlayers.items(), key=lambda item: item[ 1 ][ "name" ] )
   playerNames = [ p[ 1 ][ 'name' ] for p in sortedDivPlayers ]
@@ -450,7 +492,8 @@ for div in divisions:
     rowLabels = [ player[ 1 ][ 'name' ] for i, player in enumerate( sortedDivPlayers ) ]
 
     drawColourChart(
-        colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"appearances.{div}", sortedDivPlayers, div
+        colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"appearances.{div}", sortedDivPlayers,
+        div
     )
 
 print( "Complete" )

@@ -1,29 +1,65 @@
-{
-  "organisation": {
-    "yearId": 8,
-    "organisationKey": "45ba5d3f-a4de-4c4f-ad1b-3e474777bc64",
-    "competitionUniqueKey": "ed9f3608-81fb-4c60-82b5-7c1ab2149180"
+[
+  {
+    "organisation": {
+      "yearId": 7,
+      "organisationKey": "45ba5d3f-a4de-4c4f-ad1b-3e474777bc64",
+      "competitionUniqueKey": "74e960f7-2493-4a39-827e-15052defbf71"
+    },
+    "divisions": [
+      {
+        "name": "Metro 5 South",
+        "divisionId": "5852",
+        "teamId": 59199
+      },
+      {
+        "name": "Metro 6 Central",
+        "divisionId": "5858",
+        "teamId": 59451
+      },
+      {
+        "name": "Metro 7 Central",
+        "divisionId": "5854",
+        "teamId": 59200
+      },
+      {
+        "name": "Metro 9 South",
+        "divisionId": "5870",
+        "teamId": 59452
+      },
+      {
+        "name": "Metro 10 South",
+        "divisionId": "5851",
+        "teamId": 59453
+      }
+    ]
   },
-  "divisions": [
-    {
-      "name": "Metro 5 South",
-      "divisionId": "9177",
-      "teamId": 95328
+  {
+    "organisation": {
+      "yearId": 8,
+      "organisationKey": "45ba5d3f-a4de-4c4f-ad1b-3e474777bc64",
+      "competitionUniqueKey": "ed9f3608-81fb-4c60-82b5-7c1ab2149180"
     },
-    {
-      "name": "Metro 6 Central",
-      "divisionId": "9180",
-      "teamId": 95357
-    },
-    {
-      "name": "Metro 7 Central",
-      "divisionId": "9183",
-      "teamId": 95385
-    },
-    {
-      "name": "Metro 10 South",
-      "divisionId": "9189",
-      "teamId": 95437
-    }
-  ]
-}
+    "divisions": [
+      {
+        "name": "Metro 5 South",
+        "divisionId": "9177",
+        "teamId": 95328
+      },
+      {
+        "name": "Metro 6 Central",
+        "divisionId": "9180",
+        "teamId": 95357
+      },
+      {
+        "name": "Metro 7 Central",
+        "divisionId": "9183",
+        "teamId": 95385
+      },
+      {
+        "name": "Metro 10 South",
+        "divisionId": "9189",
+        "teamId": 95437
+      }
+    ]
+  }
+]
