@@ -1,12 +1,12 @@
 import argparse
 import json
-import os
 import re
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from playwright.sync_api import Browser, Page, Response, sync_playwright
+
+from data import cleanTeam, cleanVenue, dumpJson, getMatchingConfig, getPaths, loadJson, makeIfMissing, sanitiseTeam
 
 parser = argparse.ArgumentParser(
     prog="Squadi Parser", description="Parses data from squadi into JSON format for further processing"
@@ -24,46 +24,15 @@ with open( "data/config.json", "r" ) as f:
 
 print( f"Starting our squadi fetch for year {args.year}" )
 
-configMatch = None
-for comp in config:
-  if comp[ 'organisation' ][ 'yearId' ] == args.year:
-    configMatch = comp
-    break
+configMatch = getMatchingConfig( args.year, config )
+outputBase, _ = getPaths( configMatch )
 
-if configMatch is None:
-  print( "Please provide a valid configuration year" )
-  sys.exit( 1 )
-
-outputBase = f"output/{configMatch['organisation']['yearId']}"
-outputFolder = Path( outputBase )
-if not outputFolder.exists():
-  os.makedirs( outputFolder )
+makeIfMissing( outputBase )
 
 orgSetup = configMatch[ 'organisation' ]
 divisions = configMatch[ 'divisions' ]
 
 pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
-
-
-def cleanTeam( team ):
-  team = pattern.sub( "", team )
-  return team
-
-
-def sanitiseTeam( team ):
-  if team == 'Oxley United':
-    return 'Oxley United FC'
-  return team
-
-
-def cleanVenue( homeTeam, venue ):
-  rawPattern = f"(.+)\\({homeTeam}.*\\) (.+)"
-  pattern = re.compile( rawPattern )
-  match = pattern.match( venue )
-  if match is not None:
-    return match.group( 1 ).rstrip() + ", " + match.group( 2 )
-  else:
-    return venue
 
 
 def ladderRoot():
@@ -241,8 +210,6 @@ def processFullResultsData( div, json, existing ):
           matchingRound[ 'matches' ].append( createMatch( fetchedMatch, startTime ) )
           anyFetched = True
           print( f"   .. Adding {fetchedMatch['id']}" )
-        #else:
-        #  print( f"   .. Matched {fetchedMatch['id']}" )
 
 
 def fetchDivisionLadderAndResults( div, page: Page ):
@@ -448,17 +415,10 @@ def fetchDivNewDetails( div, browser: Browser, existing ):
 
 if args.match:
   print( "Loading existing data" )
-  with open( f"{outputBase}/ladder.json", "r" ) as f:
-    ladders = json.load( f )
-
-  with open( f"{outputBase}/results.json", "r" ) as f:
-    results = json.load( f )
-
-  with open( f"{outputBase}/next.json", "r" ) as f:
-    nexts = json.load( f )
-
-  with open( f"{outputBase}/recent.json", "r" ) as f:
-    recents = json.load( f )
+  ladders = loadJson( outputBase, 'ladder.json' )
+  results = loadJson( outputBase, 'results.json' )
+  nexts = loadJson( outputBase, 'next.json' )
+  recents = loadJson( outputBase, 'recent.json' )
 
 with sync_playwright() as p:
   browser = p.chromium.launch( headless=True )
@@ -477,30 +437,14 @@ with sync_playwright() as p:
 
   browser.close()
 
-
-def default( o ):
-  if isinstance( o, datetime ):
-    return o.isoformat()
-  raise TypeError
-
-
 if args.summary:
-  with open( f"{outputBase}/ladder.json", "w" ) as f:
-    json.dump( ladders, f, indent=2, ensure_ascii=False )
-
-  with open( f"{outputBase}/results.json", "w" ) as f:
-    json.dump( results, f, indent=2, ensure_ascii=False, default=default )
-
-  with open( f"{outputBase}/next.json", "w" ) as f:
-    json.dump( nexts, f, indent=2, ensure_ascii=False, default=default )
-
-  with open( f"{outputBase}/recent.json", "w" ) as f:
-    json.dump( recents, f, indent=2, ensure_ascii=False, default=default )
+  dumpJson( outputBase, 'ladder.json', ladders )
+  dumpJson( outputBase, 'results.json', results )
+  dumpJson( outputBase, 'next.json', nexts )
+  dumpJson( outputBase, 'recent.json', recents )
 
 if args.match and anyFetched:
-  with open( f"{outputBase}/matchDetails.json", "w" ) as f:
-    json.dump( teamMatchDetails, f, indent=2, ensure_ascii=False, default=default )
+  dumpJson( outputBase, 'matchDetails.json', teamMatchDetails )
 
 if args.div:
-  with open( f"{outputBase}/divMatchDetails.json", "w" ) as f:
-    json.dump( divMatchDetails, f, indent=2, ensure_ascii=False, default=default )
+  dumpJson( outputBase, 'divMatchDetails.json', divMatchDetails )
