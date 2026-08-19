@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from data import Player
 from stats import maxMatches
 
 
@@ -9,7 +10,7 @@ def figure_for_resolution( width_px, height_px, dpi=100 ):
   return plt.subplots( figsize=( width_px / dpi, height_px / dpi ), dpi=dpi )
 
 
-def plotStatsData( data, filename, sorted_stats, property, maxProp, labelY, title, withStep=False ):
+def plotStatsData( data, filename, sorted_stats: list[tuple[str, np.ndarray]], maxStat, labelY, title, withStep=False ):
   fig, ax = figure_for_resolution( 6000, 4000, dpi=100 )
 
   # Transparent backgrounds
@@ -21,14 +22,11 @@ def plotStatsData( data, filename, sorted_stats, property, maxProp, labelY, titl
     jitter = i * 0.03
     color = ax._get_lines.get_next_color()
     rangeData = range( 1, cumRounds + 1 )
-    cumulative = np.nancumsum( np.nan_to_num( value[ property ] ) )
-    cumulative[ np.isnan( value[ property ] ) ] = np.nan
     if withStep:
-      ax.step( rangeData, [ g + jitter for g in cumulative ], where="post", linewidth=25, color=color )
-    ax.plot( rangeData, [ g + jitter for g in cumulative ], marker="o", markersize=50, linewidth=15, label=name, color=color )
+      ax.step( rangeData, [ g + jitter for g in value ], where="post", linewidth=25, color=color )
+    ax.plot( rangeData, [ g + jitter for g in value ], marker="o", markersize=50, linewidth=15, label=name, color=color )
 
   rangeData = range( 1, cumRounds + 1 )
-  maxStat = ( sorted_stats[ 0 ][ 1 ] )[ maxProp ]
   maxStatRange = range( maxStat + 1 )
   ax.set_title( title, fontsize=320, color="white" )
   ax.set_xlabel( "Round", fontsize=56, color="white" )
@@ -78,7 +76,7 @@ def plotRowData( col_labels, rows, filename, width=3000, height=2000, vScale=4, 
 
 
 def drawColourChart(
-    colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData, div: str, plotBase: str
+    colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData: list[tuple[str, Player]], div: str, plotBase: str
 ):
 
   cellW = 40
@@ -135,7 +133,7 @@ def drawColourChart(
         football = Image.open( "ball.png" ).convert( "RGBA" )
         football_sm = football.resize( ( wd, wd ), Image.Resampling.LANCZOS )
         #print( rowData[i] )
-        nGoals = rowData[ i ][ 1 ][ 'div' ][ div ][ 'goals' ][ j ]
+        nGoals = rowData[ i ][ 1 ].stats[ div ].block.goals[ j ]
         if not np.isnan( nGoals ) and nGoals > 1:
           toDisp = str( int( nGoals ) )
           bbox = draw.textbbox( ( 0, 0 ), toDisp, font=font )

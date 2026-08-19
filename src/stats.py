@@ -2,6 +2,8 @@ import re
 
 import numpy as np
 
+from data import PlayerStats
+
 
 def makeDivBlock( numRounds ):
   return {
@@ -49,7 +51,7 @@ def uniquePlayers( data ):
   return sorted( unique_players )
 
 
-def sortedDivisions( data ):
+def sortedDivisions( data ) -> list[ str ]:
   all_divisions = set()
 
   for division in data:
@@ -62,82 +64,51 @@ def maxMatches( data ):
   return max( len( d.get( "matches", [] ) ) for d in data )
 
 
-def accumulateStats( data ):
+def accumulateStats( data ) -> PlayerStats:
 
-  player_stats = {}
+  player_stats = PlayerStats()
   maxRounds = maxMatches( data )
   for division in data:
     divName = division[ "div" ][ 'name' ]
     for matchNum, match in enumerate( division.get( "matches", [] ) ):
       for player in match[ "match" ].get( "players", [] ):
         name = player[ "name" ]
-        stats = player_stats.setdefault(
-            name, {
-                "name": name,
-                "appearances": 0,
-                "goals": 0,
-                "yellows": 0,
-                "reds": 0,
-                "fairPlay": 0,
-                "div": {},  # divName -> count,
-                "roundGoals": np.full( maxRounds, np.nan ),
-                "roundYellows": np.full( maxRounds, np.nan ),
-                "roundReds": np.full( maxRounds, np.nan ),
-                "roundFairPlay": np.full( maxRounds, np.nan ),
-                "starts": 0
-            }
-        )
+        stats = player_stats.get( name, maxRounds, divName )
 
         # appearances
-        stats[ "appearances" ] += 1
-        divStats = stats[ 'div' ].setdefault( divName, makeDivBlock( maxRounds ) )
-        divStats[ 'appearances' ] += 1
+        divStats = stats.stats[ divName ]
+        divStats.block.appearances[ matchNum ] = 1
 
         # goals/yellows/reds may not exist on this record
-        roundGoals = player.get( "goals", 0 )
-        roundYellows = player.get( "yellows", 0 )
-        roundReds = player.get( "reds", 0 )
-        didStart = player.get( "started", False )
-        if didStart:
-          stats[ "starts" ] += 1
-        stats[ "goals" ] += roundGoals
-        stats[ "yellows" ] += roundYellows
-        stats[ "reds" ] += roundReds
-        stats[ "fairPlay" ] += ( roundYellows + 2*roundReds )
+        divStats.block.goals[ matchNum ] = player.get( "goals", 0 )
+        divStats.block.yellows[ matchNum ] = player.get( "yellows", 0 )
+        divStats.block.reds[ matchNum ] = player.get( "reds", 0 )
+        divStats.block.starts[ matchNum ] = player.get( "started", 0 )
 
-        divStats[ 'goals' ][ matchNum ] = roundGoals
-        divStats[ 'yellows' ][ matchNum ] = roundYellows
-        divStats[ 'reds' ][ matchNum ] = roundReds
-        divStats[ 'fairPlay' ][ matchNum ] = roundYellows + 2*roundReds
-
-        stats[ 'roundGoals' ][ matchNum ] = newEntryValue( stats[ 'roundGoals' ][ matchNum ], roundGoals )
-        stats[ 'roundYellows' ][ matchNum ] = newEntryValue( stats[ 'roundYellows' ][ matchNum ], roundYellows )
-        stats[ 'roundReds' ][ matchNum ] = newEntryValue( stats[ 'roundReds' ][ matchNum ], roundReds )
-        stats[ 'roundFairPlay' ][ matchNum ] = newEntryValue( stats[ 'roundFairPlay' ][ matchNum ], roundYellows + 2*roundReds )
-
+  player_stats.accumulate( maxRounds )
   return player_stats
 
 
-def getInfographicData( player_stats, data ):
+def getInfographicData( player_stats: PlayerStats, data ):
   cumRounds = maxMatches( data )
-  total_goals = sum( stats[ "goals" ] for stats in player_stats.values() )
-  total_yellows = sum( stats[ "yellows" ] for stats in player_stats.values() )
-  total_reds = sum( stats[ "reds" ] for stats in player_stats.values() )
-  unique_scorers = sum( 1 for stats in player_stats.values() if stats[ "goals" ] > 0 )
-  unique_carders = sum( 1 for stats in player_stats.values() if stats[ "fairPlay" ] > 0 )
+  total_goals = int( sum( stats.goals for stats in player_stats.stats.values() ) )
+  total_yellows = int( sum( stats.yellows for stats in player_stats.stats.values() ) )
+  total_reds = int( sum( stats.reds for stats in player_stats.stats.values() ) )
+  unique_scorers = sum( 1 for stats in player_stats.stats.values() if stats.goals > 0 )
+  unique_carders = sum( 1 for stats in player_stats.stats.values() if stats.yellows > 0 or stats.reds > 0 )
   avg_goals_per_week = total_goals / cumRounds if cumRounds else 0
   round_totals = [ 0 ] * cumRounds
 
-  for stats in player_stats.values():
-    for i, g in enumerate( stats[ "roundGoals" ] ):
+  for stats in player_stats.stats.values():
+    for i, g in enumerate( stats.roundStats.goals ):
       if not np.isnan( g ):
         round_totals[ i ] += g
 
   highest_round = max( range( cumRounds ), key=lambda i: round_totals[ i ] )
   highest_round_goals = round_totals[ highest_round ]
 
-  top_scorer = max( player_stats.items(), key=lambda item: item[ 1 ][ "goals" ] )
-  top_carder = max( player_stats.items(), key=lambda item: item[ 1 ][ "fairPlay" ] )
+  top_scorer = max( player_stats.stats.items(), key=lambda item: item[ 1 ].goals )
+  top_carder = max( player_stats.stats.items(), key=lambda item: ( item[ 1 ].yellows + item[ 1 ].reds ) )
 
   return {
       "goals": total_goals,
@@ -150,11 +121,11 @@ def getInfographicData( player_stats, data ):
       "highestRoundGoals": int( highest_round_goals ),
       "numRounds": cumRounds,
       "top_scorer": {
-          "name": top_scorer[ 1 ][ 'name' ],
-          "goals": top_scorer[ 1 ][ 'goals' ]
+          "name": top_scorer[ 1 ].name,
+          "goals": int( top_scorer[ 1 ].goals )
       },
       "top_carder": {
-          "name": top_carder[ 1 ][ 'name' ],
-          "cards": top_carder[ 1 ][ 'yellows' ]
+          "name": top_carder[ 1 ].name,
+          "cards": int( top_carder[ 1 ].yellows )
       }
   }

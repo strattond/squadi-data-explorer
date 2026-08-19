@@ -15,6 +15,8 @@ parser.add_argument( "--match", action="store_true", help="Run in match detail m
 parser.add_argument( "--summary", action="store_true", help="Run in division summary mode" )
 parser.add_argument( "--div", action="store_true", help="Run in division results mode" )
 parser.add_argument( "--year", help="The competition year of interest", type=int )
+parser.add_argument( "--recent", help="The number of days considered recent", type=int, default=7 )
+parser.add_argument( "--next", help="The number of days in the future we want to get details", type=int, default=7 )
 
 args = parser.parse_args()
 
@@ -160,7 +162,7 @@ def processResultsData( div, json ):
           # It's a match for our team, so let's store the result
           matches.append( createMatch( match, startTime ) )
 
-          if startTime < now and ( now - startTime ) <= timedelta( days=7 ):
+          if startTime < now and ( now - startTime ) <= timedelta( days=args.recent ):
             recents.append( { 'div': div, 'match': createMatch( match, startTime )} )
 
         if match[ 'matchStatus' ] is None and startTime > now and ( startTime - now ) <= timedelta( days=7 ):
