@@ -2,7 +2,7 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -62,6 +62,8 @@ def cleanVenue( homeTeam, venue ):
 def default( o ):
   if isinstance( o, datetime ):
     return o.isoformat()
+  if hasattr( o, "__dataclass_fields__" ):
+    return asdict( o )
   raise TypeError
 
 
@@ -219,6 +221,69 @@ class PlayerStats:
   def accumulate( self, maxRounds ):
     for player in self.stats.values():
       player.accumulate( maxRounds )
+
+
+@dataclass
+class TopStat:
+  name: str = ""
+  value: int = 0
+
+
+@dataclass
+class TeamStats:
+  wins: int = 0
+  draws: int = 0
+  losses: int = 0
+  gf: int = 0
+  ga: int = 0
+  avgRank: float = 0.0
+
+  def __sub__( self, other ):
+    if not isinstance( other, TeamStats ):
+      return NotImplemented
+    rVal = TeamStats()
+    rVal.wins = self.wins - other.wins
+    rVal.draws = self.draws - other.draws
+    rVal.losses = self.losses - other.losses
+    rVal.gf = self.gf - other.gf
+    rVal.ga = self.ga - other.ga
+    rVal.avgRank = round( self.avgRank - other.avgRank, 1 )
+    return rVal
+
+
+@dataclass
+class InfoStats:
+  players: int = 0
+  goals: int = 0
+  yellows: int = 0
+  reds: int = 0
+  uniqueScorers: int = 0
+  uniqueCarders: int = 0
+  avgGoalsPerRound: float = 0
+  highestRound: int = 0
+  highestRoundGoals: int = 0
+  numRounds: int = 0
+  top_scorer: TopStat = field( default_factory=TopStat )
+  top_carder: TopStat = field( default_factory=TopStat )
+  teams: TeamStats = field( default_factory=TeamStats )
+
+  def __sub__( self, other ):
+    if not isinstance( other, InfoStats ):
+      return NotImplemented
+    rVal = InfoStats()
+    rVal.players = self.players - other.players
+    rVal.goals = self.goals - other.goals
+    rVal.yellows = self.yellows - other.yellows
+    rVal.reds = self.reds - other.reds
+    rVal.uniqueScorers = self.uniqueScorers - other.uniqueScorers
+    rVal.uniqueCarders = self.uniqueCarders - other.uniqueCarders
+    rVal.avgGoalsPerRound = round( self.avgGoalsPerRound - other.avgGoalsPerRound, 2 )
+    rVal.highestRoundGoals = self.highestRoundGoals - other.highestRoundGoals
+    rVal.numRounds = self.numRounds - other.numRounds
+    rVal.top_scorer.value = int(self.top_scorer.value - other.top_scorer.value)
+    rVal.top_carder.value = int(self.top_carder.value - other.top_carder.value)
+    rVal.teams = self.teams - other.teams
+    return rVal
 
 
 def playerPlayedInDivision( stats: Player, div ):

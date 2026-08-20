@@ -2,7 +2,7 @@ import re
 
 import numpy as np
 
-from data import Player, PlayerStats, getDivByName
+from data import InfoStats, Player, PlayerStats, TeamStats, getDivByName
 
 
 def makeDivBlock( numRounds ):
@@ -96,11 +96,11 @@ def list_to_dict( listData: list[ tuple[ str, Player ] ] ) -> dict[ str, Player 
   return rVal
 
 
-def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, div: str, ladders ):
+def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, div: str, ladders ) -> InfoStats | None:
 
   divDetail = getDivByName( data, div )
   if divDetail is None:
-    return
+    return None
   divPlayers = list_to_dict( player_stats )
 
   # Time to Slice and Dice
@@ -129,59 +129,43 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
   teamIDs = [ int( divDetail[ 'div' ][ 'teamId' ] ) ]
   totals = getTotalsForTeams( ladders, teamIDs )
 
-  return {
-      "players": len( divPlayers ),
-      "goals": total_goals,
-      "yellows": total_yellows,
-      "reds": total_reds,
-      "uniqueScorers": unique_scorers,
-      "uniqueCarders": unique_carders,
-      "avgGoalsPerRound": round( avg_goals_per_week, 2 ),
-      "highestRound": highest_round + 1,
-      "highestRoundGoals": int( highest_round_goals ),
-      "numRounds": cumRounds,
-      "top_scorer": {
-          "name": top_scorer.name,
-          "goals": top_scorer.goals
-      },
-      "top_carder": {
-          "name": top_carder.name,
-          "cards": top_carder.yellows
-      },
-      "teams": {
-          "wins": totals[ 'wins' ],
-          "draws": totals[ 'draws' ],
-          "losses": totals[ 'losses' ],
-          "gf": totals[ 'gf' ],
-          "ga": totals[ 'ga' ],
-          "avgRank": totals[ 'rank' ]
-      }
-  }
+  rVal = InfoStats()
+  rVal.players = len( divPlayers )
+  rVal.goals = total_goals
+  rVal.yellows = total_yellows
+  rVal.reds = total_reds
+  rVal.uniqueScorers = unique_scorers
+  rVal.uniqueCarders = unique_carders
+  rVal.avgGoalsPerRound = round( avg_goals_per_week, 2 )
+  rVal.highestRound = highest_round + 1
+  rVal.highestRoundGoals = int( highest_round_goals )
+  rVal.numRounds = cumRounds
+  rVal.top_scorer.name = top_scorer.name
+  rVal.top_scorer.value = top_scorer.goals
+
+  rVal.top_carder.name = top_carder.name
+  rVal.top_carder.value = top_carder.yellows
+
+  rVal.teams = totals
+  return rVal
 
 
-def getTotalsForTeams( ladders, teamIDs ):
-  totals = {
-      "wins": 0,
-      "draws": 0,
-      "losses": 0,
-      "gf": 0,
-      "ga": 0,
-      "rank": 0,
-  }
+def getTotalsForTeams( ladders, teamIDs ) -> TeamStats:
+  totals = TeamStats()
   for ladder in ladders:
     for row in ladder[ 'table' ]:
       if row[ 'teamId' ] in teamIDs:
-        totals[ "wins" ] += row[ "GamesWon" ]
-        totals[ "draws" ] += row[ "GamesDrawn" ]
-        totals[ "losses" ] += row[ "GamesLost" ]
-        totals[ "gf" ] += row[ "GoalsFor" ]
-        totals[ "ga" ] += row[ "GoalsAgainst" ]
-        totals[ "rank" ] += row[ "Rank" ]
+        totals.wins += row[ "GamesWon" ]
+        totals.draws += row[ "GamesDrawn" ]
+        totals.losses += row[ "GamesLost" ]
+        totals.gf += row[ "GoalsFor" ]
+        totals.ga += row[ "GoalsAgainst" ]
+        totals.avgRank += row[ "Rank" ]
 
   return totals
 
 
-def getInfographicData( player_stats: PlayerStats, divisionData, ladders ):
+def getInfographicData( player_stats: PlayerStats, divisionData, ladders ) -> InfoStats | None:
 
   cumRounds = maxMatches( divisionData )
   total_goals = int( sum( stats.goals for stats in player_stats.stats.values() ) )
@@ -206,33 +190,23 @@ def getInfographicData( player_stats: PlayerStats, divisionData, ladders ):
   teamIDs = [ int( div[ 'div' ][ 'teamId' ] ) for div in divisionData ]
   totals = getTotalsForTeams( ladders, teamIDs )
 
-  avg_rank = totals[ 'rank' ] / len( teamIDs ) if len( teamIDs ) else 0
+  avg_rank = totals.avgRank / len( teamIDs ) if len( teamIDs ) else 0
 
-  return {
-      "players": len( player_stats.stats ),
-      "goals": total_goals,
-      "yellows": total_yellows,
-      "reds": total_reds,
-      "uniqueScorers": unique_scorers,
-      "uniqueCarders": unique_carders,
-      "avgGoalsPerRound": round( avg_goals_per_week, 2 ),
-      "highestRound": highest_round,
-      "highestRoundGoals": int( highest_round_goals ),
-      "numRounds": cumRounds,
-      "top_scorer": {
-          "name": top_scorer[ 1 ].name,
-          "goals": int( top_scorer[ 1 ].goals )
-      },
-      "top_carder": {
-          "name": top_carder[ 1 ].name,
-          "cards": int( top_carder[ 1 ].yellows )
-      },
-      "teams": {
-          "wins": totals[ 'wins' ],
-          "draws": totals[ 'draws' ],
-          "losses": totals[ 'losses' ],
-          "gf": totals[ 'gf' ],
-          "ga": totals[ 'ga' ],
-          "avgRank": round( avg_rank, 1 )
-      }
-  }
+  rVal = InfoStats()
+  rVal.players = len( player_stats.stats )
+  rVal.goals = total_goals
+  rVal.yellows = total_yellows
+  rVal.reds = total_reds
+  rVal.uniqueScorers = unique_scorers
+  rVal.uniqueCarders = unique_carders
+  rVal.avgGoalsPerRound = round( avg_goals_per_week, 2 )
+  rVal.highestRound = highest_round + 1
+  rVal.highestRoundGoals = int( highest_round_goals )
+  rVal.numRounds = cumRounds
+  rVal.top_scorer.name = top_scorer[1].name
+  rVal.top_scorer.value = top_scorer[1].goals
+  rVal.top_carder.name = top_carder[1].name
+  rVal.top_carder.value = top_carder[1].yellows
+  rVal.teams = totals
+  rVal.teams.avgRank = round( avg_rank, 1 )
+  return rVal

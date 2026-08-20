@@ -1,28 +1,30 @@
 import argparse
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 
 from charting import drawColourChart, plotRowData, plotStatsData
 from data import (
-    Player,
-    PlayerStats,
-    dumpJson,
-    getDivByName,
-    getMatchingConfig,
-    getPaths,
-    getPlayersForDiv,
-    loadJson,
-    makeIfMissing,
+  InfoStats,
+  Player,
+  PlayerStats,
+  dumpJson,
+  getDivByName,
+  getMatchingConfig,
+  getPaths,
+  getPlayersForDiv,
+  loadJson,
+  makeIfMissing,
 )
 from stats import (
-    accumulatePlayersStats,
-    getInfographicData,
-    getTeamInfographicData,
-    naturalNameKey,
-    sortedDivisions,
-    uniquePlayers,
+  accumulatePlayersStats,
+  getInfographicData,
+  getTeamInfographicData,
+  naturalNameKey,
+  sortedDivisions,
+  uniquePlayers,
 )
 
 
@@ -168,42 +170,20 @@ topValue = player_stats.stats[ topName ].yellows
 print( "Plotting Golden Card" )
 plotStatsData( divisionData, f"{plotBase}/golden_card.png", topN, int( topValue ), "Yellow Cards", "Golden Card Race" )
 
-diff = {}
+diff: dict[str, InfoStats] = {}
 print( "Calculating Club Infographic" )
 print( " .. This year" )
 infographic = getInfographicData( player_stats, divisionData, ladder )
 if prevYearConfig is not None and prevYearData is not None and prevLadder is not None:
   prev_player_stats = accumulatePlayersStats( prevYearData )
   prev_infographic = getInfographicData( prev_player_stats, prevYearData, prevLadder )
-  diff[ 'overall' ] = {
-      'players': infographic[ 'players' ] - prev_infographic[ 'players' ],
-      'goals': infographic[ 'goals' ] - prev_infographic[ 'goals' ],
-      'yellows': infographic[ 'yellows' ] - prev_infographic[ 'yellows' ],
-      'reds': infographic[ 'reds' ] - prev_infographic[ 'reds' ],
-      'uniqueScorers': infographic[ 'uniqueScorers' ] - prev_infographic[ 'uniqueScorers' ],
-      'uniqueCarders': infographic[ 'uniqueCarders' ] - prev_infographic[ 'uniqueCarders' ],
-      'avgGoalsPerRound': infographic[ 'avgGoalsPerRound' ] - prev_infographic[ 'avgGoalsPerRound' ],
-      'highestRoundGoals': infographic[ 'highestRoundGoals' ] - prev_infographic[ 'highestRoundGoals' ],
-      'numRounds': infographic[ 'numRounds' ] - prev_infographic[ 'numRounds' ],
-      'top_scorer': {
-          "goals": infographic[ 'top_scorer' ][ 'goals' ] - prev_infographic[ 'top_scorer' ][ 'goals' ]
-      },
-      "top_carder": {
-          "cards": infographic[ 'top_carder' ][ 'cards' ] - prev_infographic[ 'top_carder' ][ 'cards' ]
-      },
-      "teams": {
-          "wins": infographic[ 'teams' ][ 'wins' ] - prev_infographic[ 'teams' ][ 'wins' ],
-          "draws": infographic[ 'teams' ][ 'draws' ] - prev_infographic[ 'teams' ][ 'draws' ],
-          "losses": infographic[ 'teams' ][ 'losses' ] - prev_infographic[ 'teams' ][ 'losses' ],
-          "gf": infographic[ 'teams' ][ 'gf' ] - prev_infographic[ 'teams' ][ 'gf' ],
-          "ga": infographic[ 'teams' ][ 'ga' ] - prev_infographic[ 'teams' ][ 'ga' ],
-          "avgRank": infographic[ 'teams' ][ 'avgRank' ] - prev_infographic[ 'teams' ][ 'avgRank' ],
-      }
-  }
+  if infographic is not None and prev_infographic is not None:
+    diff[ 'overall' ] = infographic - prev_infographic
 else:
   prev_player_stats = None
 
-dumpJson( outputBase, 'stats.json', infographic )
+if infographic is not None:
+  dumpJson( outputBase, 'stats.json', asdict( infographic ) )
 
 print( "Calculating borrowings" )
 rows = calculateBorrowings( player_stats, 2 )
@@ -253,7 +233,8 @@ for div in divisions:
 
   print( "   .. Team Infographics" )
   infographic = getTeamInfographicData( sortedDivPlayers, divisionData, div, ladder )
-  dumpJson( outputBase, f"stats.{div}.json", infographic )
+  if infographic is not None:
+    dumpJson( outputBase, f"stats.{div}.json", asdict( infographic ) )
 
   if prevYearConfig is not None and prevYearData is not None and prevLadder is not None and prev_player_stats is not None:
     print( "   .. Year on Year" )
@@ -264,31 +245,7 @@ for div in divisions:
       prevPlayerNames = [ p[ 0 ] for p in prevSortedDivPlayers ]
       prev_infographic = getTeamInfographicData( prevSortedDivPlayers, prevYearData, div, prevLadder )
       if infographic is not None and prev_infographic is not None:
-        diff[ div ] = {
-            'players': infographic[ 'players' ] - prev_infographic[ 'players' ],
-            'goals': infographic[ 'goals' ] - prev_infographic[ 'goals' ],
-            'yellows': infographic[ 'yellows' ] - prev_infographic[ 'yellows' ],
-            'reds': infographic[ 'reds' ] - prev_infographic[ 'reds' ],
-            'uniqueScorers': infographic[ 'uniqueScorers' ] - prev_infographic[ 'uniqueScorers' ],
-            'uniqueCarders': infographic[ 'uniqueCarders' ] - prev_infographic[ 'uniqueCarders' ],
-            'avgGoalsPerRound': infographic[ 'avgGoalsPerRound' ] - prev_infographic[ 'avgGoalsPerRound' ],
-            'highestRoundGoals': infographic[ 'highestRoundGoals' ] - prev_infographic[ 'highestRoundGoals' ],
-            'numRounds': infographic[ 'numRounds' ] - prev_infographic[ 'numRounds' ],
-            'top_scorer': {
-                "goals": infographic[ 'top_scorer' ][ 'goals' ] - prev_infographic[ 'top_scorer' ][ 'goals' ]
-            },
-            "top_carder": {
-                "cards": infographic[ 'top_carder' ][ 'cards' ] - prev_infographic[ 'top_carder' ][ 'cards' ]
-            },
-            "teams": {
-                "wins": infographic[ 'teams' ][ 'wins' ] - prev_infographic[ 'teams' ][ 'wins' ],
-                "draws": infographic[ 'teams' ][ 'draws' ] - prev_infographic[ 'teams' ][ 'draws' ],
-                "losses": infographic[ 'teams' ][ 'losses' ] - prev_infographic[ 'teams' ][ 'losses' ],
-                "gf": infographic[ 'teams' ][ 'gf' ] - prev_infographic[ 'teams' ][ 'gf' ],
-                "ga": infographic[ 'teams' ][ 'ga' ] - prev_infographic[ 'teams' ][ 'ga' ],
-                "avgRank": infographic[ 'teams' ][ 'avgRank' ] - prev_infographic[ 'teams' ][ 'avgRank' ],
-            }
-        }
+        diff[ div ] = infographic - prev_infographic
     else:
       print( "     .. Skipped! No team in that division last year" )
 
