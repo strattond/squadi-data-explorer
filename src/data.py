@@ -126,6 +126,27 @@ class PlayerDivision:
 
 
 @dataclass
+class PlayerDivView:
+  name: str
+  div: str
+  stats: StatBlock = field( init=False )
+  appearances: int = 0
+  goals: int = 0
+  yellows: int = 0
+  reds: int = 0
+  fairPlay: int = 0
+  starts: int = 0
+
+  def accumulate( self ):
+    self.appearances = int( np.nansum( self.stats.appearances ) )
+    self.goals = int( np.nansum( self.stats.goals ) )
+    self.yellows = int( np.nansum( self.stats.yellows ) )
+    self.reds = int( np.nansum( self.stats.reds ) )
+    self.fairPlay = int( np.nansum( self.stats.fairPlay ) )
+    self.starts = int( np.nansum( self.stats.starts ) )
+
+
+@dataclass
 class Player:
   name: str
   stats: dict[ str, PlayerDivision ] = field( default_factory=dict )
@@ -137,6 +158,14 @@ class Player:
   reds: int = 0
   fairPlay: int = 0
   starts: int = 0
+
+  def slice( self, divName ) -> PlayerDivView:
+    exDiv = self.stats.get( divName )
+    rVal = PlayerDivView( self.name, divName )
+    if not exDiv is None:
+      rVal.stats = exDiv.block
+      rVal.accumulate()
+    return rVal
 
   def checkDiv( self, maxRounds, divName ):
     exDiv = self.stats.get( divName )
@@ -174,7 +203,6 @@ class Player:
     self.cumStats.reds[ np.isnan( self.roundStats.reds ) ] = np.nan
 
 
-
 @dataclass
 class PlayerStats:
   stats: dict[ str, Player ] = field( default_factory=dict )
@@ -191,3 +219,12 @@ class PlayerStats:
   def accumulate( self, maxRounds ):
     for player in self.stats.values():
       player.accumulate( maxRounds )
+
+
+def playerPlayedInDivision( stats: Player, div ):
+  return div in stats.stats and np.any( ~np.isnan( stats.stats[ div ].block.appearances ) )
+
+
+def getPlayersForDiv( player_stats: PlayerStats, div: str ) -> list[ tuple[ str, Player ] ]:
+  divPlayers = { name: player for name, player in player_stats.stats.items() if playerPlayedInDivision( player, div ) }
+  return sorted( divPlayers.items(), key=lambda item: ( -np.nansum( item[ 1 ].stats[ div ].block.appearances ), item[ 0 ] ) )

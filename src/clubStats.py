@@ -5,25 +5,31 @@ from pathlib import Path
 import numpy as np
 
 from charting import drawColourChart, plotRowData, plotStatsData
-from data import Player, PlayerStats, dumpJson, getDivByName, getMatchingConfig, getPaths, loadJson, makeIfMissing
-from stats import accumulateStats, getInfographicData, naturalNameKey, sortedDivisions, uniquePlayers
+from data import (
+    Player,
+    PlayerStats,
+    dumpJson,
+    getDivByName,
+    getMatchingConfig,
+    getPaths,
+    getPlayersForDiv,
+    loadJson,
+    makeIfMissing,
+)
+from stats import accumulateStats, getInfographicData, getTeamInfographicData, naturalNameKey, sortedDivisions, uniquePlayers
 
 
 def playerPrimaryDivision( stats: Player ):
-  return max( stats.stats, key=lambda div: np.nansum( stats.stats[ div ].block.appearances) )
-
-
-def playerPlayedInDivision( stats: Player, div ):
-  return div in stats.stats and np.any(~np.isnan(stats.stats[ div ].block.appearances))
+  return max( stats.stats, key=lambda div: np.nansum( stats.stats[ div ].block.appearances ) )
 
 
 def calcPlayerBorrowStats( stats: Player ):
   primary = playerPrimaryDivision( stats )
-  return { div: int(np.nansum(count.block.appearances)) for div, count in stats.stats.items() if div != primary }
+  return { div: int( np.nansum( count.block.appearances ) ) for div, count in stats.stats.items() if div != primary }
 
 
 def calcPlayerStats( stats: Player ):
-  return { div: int(np.nansum(count.block.appearances)) for div, count in stats.stats.items() }
+  return { div: int( np.nansum( count.block.appearances ) ) for div, count in stats.stats.items() }
 
 
 def totalBorrowings( stats: Player ):
@@ -67,12 +73,12 @@ def calculateBorrowings( statsOfInterest: PlayerStats, minDivisions=2 ):
     totalBorrow = totalBorrowings( stats )
     if totalBorrow > 1:
       playedStats = calcPlayerStats( stats )
-      row = [ name, totalBorrow ] + [ playedStats.get( div, "" ) for div in divisions ] + [ int(stats.appearances) ]
+      row = [ name, totalBorrow ] + [ playedStats.get( div, "" ) for div in divisions ] + [ int( stats.appearances ) ]
       rows.append( row )
   return rows
 
 
-def calcAppearanceMatrix( sortedDivPlayers: list[tuple[str, Player]], divDetail ):
+def calcAppearanceMatrix( sortedDivPlayers: list[ tuple[ str, Player ] ], divDetail ):
   playerMatrix = np.zeros( ( len( sortedDivPlayers ), numRounds ), dtype=np.uint32 )
   for i, p in enumerate( sortedDivPlayers ):
     for r in range( numRounds ):
@@ -84,11 +90,6 @@ def calcAppearanceMatrix( sortedDivPlayers: list[tuple[str, Player]], divDetail 
           break
       playerMatrix[ i, r ] = calcAppearanceScore( matched )
   return playerMatrix
-
-
-def getPlayersForDiv( player_stats: PlayerStats ) -> list[tuple[str, Player]]:
-  divPlayers = { name: player for name, player in player_stats.stats.items() if playerPlayedInDivision( player, div ) }
-  return sorted( divPlayers.items(), key=lambda item: ( -np.nansum(item[ 1 ].stats[ div ].block.appearances), item[ 0 ] ) )
 
 
 parser = argparse.ArgumentParser(
@@ -126,24 +127,24 @@ player_stats = accumulateStats( data )
 
 print( " .. Sorting by Goals" )
 topN = sorted( ( ( name, player.cumStats.goals ) for name, player in player_stats.stats.items() if player.goals > 2 ),
-               key=lambda item: player_stats.stats[item[0]].goals,
+               key=lambda item: player_stats.stats[ item[ 0 ] ].goals,
                reverse=True )
 
 topN = topN[ :10 ]
-topName = topN[0][0]
-topValue = player_stats.stats[topName].goals
+topName = topN[ 0 ][ 0 ]
+topValue = player_stats.stats[ topName ].goals
 
 print( "Plotting Golden Boot" )
 plotStatsData( data, f"{plotBase}/golden_boot.png", topN, int( topValue ), "Goals", "Golden Boot Race" )
 
 print( " .. Sorting by Fair Play" )
 sorted_stats = sorted( ( ( name, player.cumStats.yellows ) for name, player in player_stats.stats.items() ),
-                       key=lambda item: player_stats.stats[item[0]].yellows,
+                       key=lambda item: player_stats.stats[ item[ 0 ] ].yellows,
                        reverse=True )
 
 topN = sorted_stats[ :5 ]
-topName = sorted_stats[0][0]
-topValue = player_stats.stats[topName].yellows
+topName = sorted_stats[ 0 ][ 0 ]
+topValue = player_stats.stats[ topName ].yellows
 
 print( "Plotting Golden Card" )
 plotStatsData( data, f"{plotBase}/golden_card.png", topN, int( topValue ), "Yellow Cards", "Golden Card Race" )
@@ -159,15 +160,19 @@ col_labels = [ "Player", "Borrowed" ] + divisions + [ "Total appearances" ]
 col_widths = [ 24, 12 ] + [ 20 ] * len( divisions ) + [ 12 ]
 plotRowData( col_labels, rows, f"{plotBase}/borrowings.png", 1280, 960, 1, 72 )
 
-print( "Calculating appearances" )
+print( "Calculating per-team details" )
 for div in divisions:
   print( f" .. {div}" )
 
-  sortedDivPlayers = getPlayersForDiv( player_stats )
+  sortedDivPlayers = getPlayersForDiv( player_stats, div )
 
   rows = []
   for name, stats in sortedDivPlayers:
-    row = [ name, int(np.nansum(stats.stats[ div ].block.appearances)), int(np.nansum(stats.stats[ div ].block.starts)) ]
+    row = [
+        name,
+        int( np.nansum( stats.stats[ div ].block.appearances ) ),
+        int( np.nansum( stats.stats[ div ].block.starts ) )
+    ]
     rows.append( row )
 
   col_labels = [ "Player", "Appearances", "Starts" ]
@@ -191,5 +196,8 @@ for div in divisions:
         colors, numRounds, len( sortedDivPlayers ), colLabels, rowLabels, playerMatrix, f"appearances.{div}", sortedDivPlayers,
         div, plotBase
     )
+
+  infographic = getTeamInfographicData( sortedDivPlayers, data, div )
+  dumpJson( outputBase, f"stats.{div}.json", infographic )
 
 print( "Complete" )
