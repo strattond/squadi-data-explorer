@@ -64,7 +64,7 @@ def maxMatches( data ):
   return max( len( d.get( "matches", [] ) ) for d in data )
 
 
-def accumulateStats( data ) -> PlayerStats:
+def accumulatePlayersStats( data ) -> PlayerStats:
 
   player_stats = PlayerStats()
   maxRounds = maxMatches( data )
@@ -96,7 +96,7 @@ def list_to_dict( listData: list[ tuple[ str, Player ] ] ) -> dict[ str, Player 
   return rVal
 
 
-def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, div: str ):
+def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, div: str, ladders ):
 
   divDetail = getDivByName( data, div )
   if divDetail is None:
@@ -126,10 +126,11 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
   top_scorer = max( sliced, key=lambda item: item.goals )
   top_carder = max( sliced, key=lambda item: ( item.yellows + item.reds ) )
 
-  for player in sliced:
-    print( f"{player.name:<32} {player.goals} {player.yellows} {player.reds}" )
+  teamIDs = [ int( divDetail[ 'div' ][ 'teamId' ] ) ]
+  totals = getTotalsForTeams( ladders, teamIDs )
 
   return {
+      "players": len( divPlayers ),
       "goals": total_goals,
       "yellows": total_yellows,
       "reds": total_reds,
@@ -146,13 +147,43 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
       "top_carder": {
           "name": top_carder.name,
           "cards": top_carder.yellows
+      },
+      "teams": {
+          "wins": totals[ 'wins' ],
+          "draws": totals[ 'draws' ],
+          "losses": totals[ 'losses' ],
+          "gf": totals[ 'gf' ],
+          "ga": totals[ 'ga' ],
+          "avgRank": totals[ 'rank' ]
       }
   }
 
 
-def getInfographicData( player_stats: PlayerStats, data ):
+def getTotalsForTeams( ladders, teamIDs ):
+  totals = {
+      "wins": 0,
+      "draws": 0,
+      "losses": 0,
+      "gf": 0,
+      "ga": 0,
+      "rank": 0,
+  }
+  for ladder in ladders:
+    for row in ladder[ 'table' ]:
+      if row[ 'teamId' ] in teamIDs:
+        totals[ "wins" ] += row[ "GamesWon" ]
+        totals[ "draws" ] += row[ "GamesDrawn" ]
+        totals[ "losses" ] += row[ "GamesLost" ]
+        totals[ "gf" ] += row[ "GoalsFor" ]
+        totals[ "ga" ] += row[ "GoalsAgainst" ]
+        totals[ "rank" ] += row[ "Rank" ]
 
-  cumRounds = maxMatches( data )
+  return totals
+
+
+def getInfographicData( player_stats: PlayerStats, divisionData, ladders ):
+
+  cumRounds = maxMatches( divisionData )
   total_goals = int( sum( stats.goals for stats in player_stats.stats.values() ) )
   total_yellows = int( sum( stats.yellows for stats in player_stats.stats.values() ) )
   total_reds = int( sum( stats.reds for stats in player_stats.stats.values() ) )
@@ -172,7 +203,13 @@ def getInfographicData( player_stats: PlayerStats, data ):
   top_scorer = max( player_stats.stats.items(), key=lambda item: item[ 1 ].goals )
   top_carder = max( player_stats.stats.items(), key=lambda item: ( item[ 1 ].yellows + item[ 1 ].reds ) )
 
+  teamIDs = [ int( div[ 'div' ][ 'teamId' ] ) for div in divisionData ]
+  totals = getTotalsForTeams( ladders, teamIDs )
+
+  avg_rank = totals[ 'rank' ] / len( teamIDs ) if len( teamIDs ) else 0
+
   return {
+      "players": len( player_stats.stats ),
       "goals": total_goals,
       "yellows": total_yellows,
       "reds": total_reds,
@@ -189,5 +226,13 @@ def getInfographicData( player_stats: PlayerStats, data ):
       "top_carder": {
           "name": top_carder[ 1 ].name,
           "cards": int( top_carder[ 1 ].yellows )
+      },
+      "teams": {
+          "wins": totals[ 'wins' ],
+          "draws": totals[ 'draws' ],
+          "losses": totals[ 'losses' ],
+          "gf": totals[ 'gf' ],
+          "ga": totals[ 'ga' ],
+          "avgRank": round( avg_rank, 1 )
       }
   }

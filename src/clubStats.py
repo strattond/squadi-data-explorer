@@ -16,7 +16,14 @@ from data import (
     loadJson,
     makeIfMissing,
 )
-from stats import accumulateStats, getInfographicData, getTeamInfographicData, naturalNameKey, sortedDivisions, uniquePlayers
+from stats import (
+    accumulatePlayersStats,
+    getInfographicData,
+    getTeamInfographicData,
+    naturalNameKey,
+    sortedDivisions,
+    uniquePlayers,
+)
 
 
 def playerPrimaryDivision( stats: Player ):
@@ -107,6 +114,17 @@ print( f"Starting our squadi stats processing for year {args.year}" )
 configMatch = getMatchingConfig( args.year, config )
 outputBase, plotBase = getPaths( configMatch )
 
+prevYearConfig = getMatchingConfig( args.year - 1, config )
+if prevYearConfig is None:
+  print( "Skipping Year on Year, no data" )
+  prevYearData = None
+  prevLadder = None
+else:
+  print( "Loading prev year data" )
+  prevOutputBase, prevPlotBase = getPaths( prevYearConfig )
+  prevYearData = loadJson( prevOutputBase, 'matchDetails.json' )
+  prevLadder = loadJson( prevOutputBase, 'ladder.json' )
+
 outputFolder = Path( outputBase )
 if not outputFolder.exists():
   print( "Please retrieve Squadi data first" )
@@ -115,15 +133,16 @@ if not outputFolder.exists():
 makeIfMissing( plotBase )
 
 print( "Loading data" )
-data = loadJson( outputBase, 'matchDetails.json' )
+divisionData = loadJson( outputBase, 'matchDetails.json' )
+ladder = loadJson( outputBase, 'ladder.json' )
 
 print( " .. Getting unique players" )
-players = uniquePlayers( data )
+players = uniquePlayers( divisionData )
 
 print( " .. Getting divisions" )
-divisions = sortedDivisions( data )
+divisions = sortedDivisions( divisionData )
 print( "Accumulating stats" )
-player_stats = accumulateStats( data )
+player_stats = accumulatePlayersStats( divisionData )
 
 print( " .. Sorting by Goals" )
 topN = sorted( ( ( name, player.cumStats.goals ) for name, player in player_stats.stats.items() if player.goals > 2 ),
@@ -135,7 +154,7 @@ topName = topN[ 0 ][ 0 ]
 topValue = player_stats.stats[ topName ].goals
 
 print( "Plotting Golden Boot" )
-plotStatsData( data, f"{plotBase}/golden_boot.png", topN, int( topValue ), "Goals", "Golden Boot Race" )
+plotStatsData( divisionData, f"{plotBase}/golden_boot.png", topN, int( topValue ), "Goals", "Golden Boot Race" )
 
 print( " .. Sorting by Fair Play" )
 sorted_stats = sorted( ( ( name, player.cumStats.yellows ) for name, player in player_stats.stats.items() ),
@@ -147,9 +166,42 @@ topName = sorted_stats[ 0 ][ 0 ]
 topValue = player_stats.stats[ topName ].yellows
 
 print( "Plotting Golden Card" )
-plotStatsData( data, f"{plotBase}/golden_card.png", topN, int( topValue ), "Yellow Cards", "Golden Card Race" )
+plotStatsData( divisionData, f"{plotBase}/golden_card.png", topN, int( topValue ), "Yellow Cards", "Golden Card Race" )
 
-infographic = getInfographicData( player_stats, data )
+diff = {}
+print( "Calculating Club Infographic" )
+print( " .. This year" )
+infographic = getInfographicData( player_stats, divisionData, ladder )
+if prevYearConfig is not None and prevYearData is not None and prevLadder is not None:
+  prev_player_stats = accumulatePlayersStats( prevYearData )
+  prev_infographic = getInfographicData( prev_player_stats, prevYearData, prevLadder )
+  diff[ 'overall' ] = {
+      'players': infographic[ 'players' ] - prev_infographic[ 'players' ],
+      'goals': infographic[ 'goals' ] - prev_infographic[ 'goals' ],
+      'yellows': infographic[ 'yellows' ] - prev_infographic[ 'yellows' ],
+      'reds': infographic[ 'reds' ] - prev_infographic[ 'reds' ],
+      'uniqueScorers': infographic[ 'uniqueScorers' ] - prev_infographic[ 'uniqueScorers' ],
+      'uniqueCarders': infographic[ 'uniqueCarders' ] - prev_infographic[ 'uniqueCarders' ],
+      'avgGoalsPerRound': infographic[ 'avgGoalsPerRound' ] - prev_infographic[ 'avgGoalsPerRound' ],
+      'highestRoundGoals': infographic[ 'highestRoundGoals' ] - prev_infographic[ 'highestRoundGoals' ],
+      'numRounds': infographic[ 'numRounds' ] - prev_infographic[ 'numRounds' ],
+      'top_scorer': {
+          "goals": infographic[ 'top_scorer' ][ 'goals' ] - prev_infographic[ 'top_scorer' ][ 'goals' ]
+      },
+      "top_carder": {
+          "cards": infographic[ 'top_carder' ][ 'cards' ] - prev_infographic[ 'top_carder' ][ 'cards' ]
+      },
+      "teams": {
+          "wins": infographic[ 'teams' ][ 'wins' ] - prev_infographic[ 'teams' ][ 'wins' ],
+          "draws": infographic[ 'teams' ][ 'draws' ] - prev_infographic[ 'teams' ][ 'draws' ],
+          "losses": infographic[ 'teams' ][ 'losses' ] - prev_infographic[ 'teams' ][ 'losses' ],
+          "gf": infographic[ 'teams' ][ 'gf' ] - prev_infographic[ 'teams' ][ 'gf' ],
+          "ga": infographic[ 'teams' ][ 'ga' ] - prev_infographic[ 'teams' ][ 'ga' ],
+          "avgRank": infographic[ 'teams' ][ 'avgRank' ] - prev_infographic[ 'teams' ][ 'avgRank' ],
+      }
+  }
+else:
+  prev_player_stats = None
 
 dumpJson( outputBase, 'stats.json', infographic )
 
@@ -175,13 +227,15 @@ for div in divisions:
     ]
     rows.append( row )
 
+  print( "   .. Appearances" )
   col_labels = [ "Player", "Appearances", "Starts" ]
   plotRowData( col_labels, rows, f"{plotBase}/teamList.{div}.png", 1280, ( 48 * ( len( rows ) + 1 ) ), 2 )
 
   sortedDivPlayers = sorted( sortedDivPlayers, key=lambda item: item[ 0 ] )
   playerNames = [ p[ 0 ] for p in sortedDivPlayers ]
 
-  divDetail = getDivByName( data, div )
+  print( "   .. Player Matrix" )
+  divDetail = getDivByName( divisionData, div )
   if divDetail is not None:
     numRounds = len( divDetail[ 'matches' ] )
     playerMatrix = calcAppearanceMatrix( sortedDivPlayers, divDetail )
@@ -197,7 +251,47 @@ for div in divisions:
         div, plotBase
     )
 
-  infographic = getTeamInfographicData( sortedDivPlayers, data, div )
+  print( "   .. Team Infographics" )
+  infographic = getTeamInfographicData( sortedDivPlayers, divisionData, div, ladder )
   dumpJson( outputBase, f"stats.{div}.json", infographic )
 
+  if prevYearConfig is not None and prevYearData is not None and prevLadder is not None and prev_player_stats is not None:
+    print( "   .. Year on Year" )
+    prevYearDiv = getDivByName( prevYearData, div )
+    if prevYearDiv is not None:
+      prevSortedDivPlayers = getPlayersForDiv( prev_player_stats, div )
+      prevSortedDivPlayers = sorted( prevSortedDivPlayers, key=lambda item: item[ 0 ] )
+      prevPlayerNames = [ p[ 0 ] for p in prevSortedDivPlayers ]
+      prev_infographic = getTeamInfographicData( prevSortedDivPlayers, prevYearData, div, prevLadder )
+      if infographic is not None and prev_infographic is not None:
+        diff[ div ] = {
+            'players': infographic[ 'players' ] - prev_infographic[ 'players' ],
+            'goals': infographic[ 'goals' ] - prev_infographic[ 'goals' ],
+            'yellows': infographic[ 'yellows' ] - prev_infographic[ 'yellows' ],
+            'reds': infographic[ 'reds' ] - prev_infographic[ 'reds' ],
+            'uniqueScorers': infographic[ 'uniqueScorers' ] - prev_infographic[ 'uniqueScorers' ],
+            'uniqueCarders': infographic[ 'uniqueCarders' ] - prev_infographic[ 'uniqueCarders' ],
+            'avgGoalsPerRound': infographic[ 'avgGoalsPerRound' ] - prev_infographic[ 'avgGoalsPerRound' ],
+            'highestRoundGoals': infographic[ 'highestRoundGoals' ] - prev_infographic[ 'highestRoundGoals' ],
+            'numRounds': infographic[ 'numRounds' ] - prev_infographic[ 'numRounds' ],
+            'top_scorer': {
+                "goals": infographic[ 'top_scorer' ][ 'goals' ] - prev_infographic[ 'top_scorer' ][ 'goals' ]
+            },
+            "top_carder": {
+                "cards": infographic[ 'top_carder' ][ 'cards' ] - prev_infographic[ 'top_carder' ][ 'cards' ]
+            },
+            "teams": {
+                "wins": infographic[ 'teams' ][ 'wins' ] - prev_infographic[ 'teams' ][ 'wins' ],
+                "draws": infographic[ 'teams' ][ 'draws' ] - prev_infographic[ 'teams' ][ 'draws' ],
+                "losses": infographic[ 'teams' ][ 'losses' ] - prev_infographic[ 'teams' ][ 'losses' ],
+                "gf": infographic[ 'teams' ][ 'gf' ] - prev_infographic[ 'teams' ][ 'gf' ],
+                "ga": infographic[ 'teams' ][ 'ga' ] - prev_infographic[ 'teams' ][ 'ga' ],
+                "avgRank": infographic[ 'teams' ][ 'avgRank' ] - prev_infographic[ 'teams' ][ 'avgRank' ],
+            }
+        }
+    else:
+      print( "     .. Skipped! No team in that division last year" )
+
+if diff is not None:
+  dumpJson( outputBase, 'diff.json', diff )
 print( "Complete" )
