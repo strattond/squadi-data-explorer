@@ -7,24 +7,24 @@ import numpy as np
 
 from charting import drawColourChart, plotRowData, plotStatsData
 from data import (
-  InfoStats,
-  Player,
-  PlayerStats,
-  dumpJson,
-  getDivByName,
-  getMatchingConfig,
-  getPaths,
-  getPlayersForDiv,
-  loadJson,
-  makeIfMissing,
+    InfoStats,
+    Player,
+    PlayerStats,
+    dumpJson,
+    getDivByName,
+    getMatchingConfig,
+    getPaths,
+    getPlayersForDiv,
+    loadJson,
+    makeIfMissing,
 )
 from stats import (
-  accumulatePlayersStats,
-  getInfographicData,
-  getTeamInfographicData,
-  naturalNameKey,
-  sortedDivisions,
-  uniquePlayers,
+    accumulatePlayersStats,
+    getInfographicData,
+    getTeamInfographicData,
+    naturalNameKey,
+    sortedDivisions,
+    uniquePlayers,
 )
 
 
@@ -170,11 +170,12 @@ topValue = player_stats.stats[ topName ].yellows
 print( "Plotting Golden Card" )
 plotStatsData( divisionData, f"{plotBase}/golden_card.png", topN, int( topValue ), "Yellow Cards", "Golden Card Race" )
 
-diff: dict[str, InfoStats] = {}
+diff: dict[ str, InfoStats ] = {}
 print( "Calculating Club Infographic" )
 print( " .. This year" )
 infographic = getInfographicData( player_stats, divisionData, ladder )
 if prevYearConfig is not None and prevYearData is not None and prevLadder is not None:
+  prevYearData = [ div for div in prevYearData if div[ 'div' ][ 'name' ] in divisions ]
   prev_player_stats = accumulatePlayersStats( prevYearData )
   prev_infographic = getInfographicData( prev_player_stats, prevYearData, prevLadder )
   if infographic is not None and prev_infographic is not None:
