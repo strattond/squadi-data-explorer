@@ -1,6 +1,44 @@
 [
   {
     "organisation": {
+      "yearId": 5,
+      "organisationKey": "45ba5d3f-a4de-4c4f-ad1b-3e474777bc64",
+      "competitionUniqueKey": "d30d45e7-130d-4104-8148-491d6eb71a03"
+    },
+    "divisions": [
+      {
+        "name": "Metro 6 South",
+        "divisionId": "770",
+        "teamId": 6245
+      },
+      {
+        "name": "Metro 7 Central",
+        "divisionId": "816",
+        "teamId": 6246
+      }
+    ]
+  },
+  {
+    "organisation": {
+      "yearId": 6,
+      "organisationKey": "45ba5d3f-a4de-4c4f-ad1b-3e474777bc64",
+      "competitionUniqueKey": "bcfbdf76-c792-4ae5-ab46-c622a0db692c"
+    },
+    "divisions": [
+      {
+        "name": "Metro 5 Central",
+        "divisionId": "2735",
+        "teamId": 24850
+      },
+      {
+        "name": "Metro 7 Central",
+        "divisionId": "2737",
+        "teamId": 24847
+      }
+    ]
+  },
+  {
+    "organisation": {
       "yearId": 7,
       "organisationKey": "45ba5d3f-a4de-4c4f-ad1b-3e474777bc64",
       "competitionUniqueKey": "74e960f7-2493-4a39-827e-15052defbf71"

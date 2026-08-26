@@ -254,6 +254,8 @@ class TeamStats:
 @dataclass
 class InfoStats:
   players: int = 0
+  newPlayers: int = 0
+  lostPlayers: int = 0
   goals: int = 0
   yellows: int = 0
   reds: int = 0

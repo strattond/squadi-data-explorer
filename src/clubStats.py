@@ -117,14 +117,15 @@ configMatch = getMatchingConfig( args.year, config )
 outputBase, plotBase = getPaths( configMatch )
 
 prevYearConfig = getMatchingConfig( args.year - 1, config )
+prevYearData = None
 if prevYearConfig is None:
   print( "Skipping Year on Year, no data" )
-  prevYearData = None
+  unfilteredPrevYearData = None
   prevLadder = None
 else:
   print( "Loading prev year data" )
   prevOutputBase, prevPlotBase = getPaths( prevYearConfig )
-  prevYearData = loadJson( prevOutputBase, 'matchDetails.json' )
+  unfilteredPrevYearData = loadJson( prevOutputBase, 'matchDetails.json' )
   prevLadder = loadJson( prevOutputBase, 'ladder.json' )
 
 outputFolder = Path( outputBase )
@@ -174,12 +175,19 @@ diff: dict[ str, InfoStats ] = {}
 print( "Calculating Club Infographic" )
 print( " .. This year" )
 infographic = getInfographicData( player_stats, divisionData, ladder )
-if prevYearConfig is not None and prevYearData is not None and prevLadder is not None:
-  prevYearData = [ div for div in prevYearData if div[ 'div' ][ 'name' ] in divisions ]
+if prevYearConfig is not None and unfilteredPrevYearData is not None and prevLadder is not None:
+  prevYearData = [ div for div in unfilteredPrevYearData if div[ 'div' ][ 'name' ] in divisions ]
   prev_player_stats = accumulatePlayersStats( prevYearData )
   prev_infographic = getInfographicData( prev_player_stats, prevYearData, prevLadder )
   if infographic is not None and prev_infographic is not None:
     diff[ 'overall' ] = infographic - prev_infographic
+    ufStats = accumulatePlayersStats( unfilteredPrevYearData )
+    crNames = [ p for p in player_stats.stats ]
+    ppNames = [ p for p in ufStats.stats ]
+    lstPlayers = [ name for name in ppNames if name not in crNames ]
+    newPlayers = [ name for name in crNames if name not in ppNames ]
+    diff[ 'overall' ].lostPlayers = len( lstPlayers )
+    diff[ 'overall' ].newPlayers = len( newPlayers )
 else:
   prev_player_stats = None
 
@@ -237,7 +245,7 @@ for div in divisions:
   if infographic is not None:
     dumpJson( outputBase, f"stats.{div}.json", asdict( infographic ) )
 
-  if prevYearConfig is not None and prevYearData is not None and prevLadder is not None and prev_player_stats is not None:
+  if prevYearConfig is not None and unfilteredPrevYearData is not None and prevLadder is not None and prev_player_stats is not None and prevYearData is not None:
     print( "   .. Year on Year" )
     prevYearDiv = getDivByName( prevYearData, div )
     if prevYearDiv is not None:
@@ -247,6 +255,11 @@ for div in divisions:
       prev_infographic = getTeamInfographicData( prevSortedDivPlayers, prevYearData, div, prevLadder )
       if infographic is not None and prev_infographic is not None:
         diff[ div ] = infographic - prev_infographic
+
+        lstPlayers = [ name for name in prevPlayerNames if name not in playerNames ]
+        newPlayers = [ name for name in playerNames if name not in prevPlayerNames ]
+        diff[ div ].lostPlayers = len( lstPlayers )
+        diff[ div ].newPlayers = len( newPlayers )
     else:
       print( "     .. Skipped! No team in that division last year" )
 
