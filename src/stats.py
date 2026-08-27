@@ -141,10 +141,10 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
   rVal.highestRoundGoals = int( highest_round_goals )
   rVal.numRounds = cumRounds
   rVal.top_scorer.name = top_scorer.name
-  rVal.top_scorer.value = top_scorer.goals
+  rVal.top_scorer.value = int(top_scorer.goals)
 
   rVal.top_carder.name = top_carder.name
-  rVal.top_carder.value = top_carder.yellows
+  rVal.top_carder.value = int(top_carder.yellows + top_carder.reds)
 
   rVal.teams = totals
   return rVal
@@ -204,9 +204,9 @@ def getInfographicData( player_stats: PlayerStats, divisionData, ladders ) -> In
   rVal.highestRoundGoals = int( highest_round_goals )
   rVal.numRounds = cumRounds
   rVal.top_scorer.name = top_scorer[1].name
-  rVal.top_scorer.value = top_scorer[1].goals
+  rVal.top_scorer.value = int(top_scorer[1].goals)
   rVal.top_carder.name = top_carder[1].name
-  rVal.top_carder.value = top_carder[1].yellows
+  rVal.top_carder.value = int(top_carder[1].yellows + top_carder[1].reds)
   rVal.teams = totals
   rVal.teams.avgRank = round( avg_rank, 1 )
   return rVal

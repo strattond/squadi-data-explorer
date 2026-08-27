@@ -172,12 +172,16 @@ print( "Plotting Golden Card" )
 plotStatsData( divisionData, f"{plotBase}/golden_card.png", topN, int( topValue ), "Yellow Cards", "Golden Card Race" )
 
 diff: dict[ str, InfoStats ] = {}
+year: dict[ str, InfoStats ] = {}
 print( "Calculating Club Infographic" )
 print( " .. This year" )
 infographic = getInfographicData( player_stats, divisionData, ladder )
+if infographic is not None:
+  year[ 'overall' ] = infographic
 if prevYearConfig is not None and unfilteredPrevYearData is not None and prevLadder is not None:
   prevYearData = [ div for div in unfilteredPrevYearData if div[ 'div' ][ 'name' ] in divisions ]
   prev_player_stats = accumulatePlayersStats( prevYearData )
+  print( " .. Last year" )
   prev_infographic = getInfographicData( prev_player_stats, prevYearData, prevLadder )
   if infographic is not None and prev_infographic is not None:
     diff[ 'overall' ] = infographic - prev_infographic
@@ -191,8 +195,6 @@ if prevYearConfig is not None and unfilteredPrevYearData is not None and prevLad
 else:
   prev_player_stats = None
 
-if infographic is not None:
-  dumpJson( outputBase, 'stats.json', asdict( infographic ) )
 
 print( "Calculating borrowings" )
 rows = calculateBorrowings( player_stats, 2 )
@@ -243,6 +245,7 @@ for div in divisions:
   print( "   .. Team Infographics" )
   infographic = getTeamInfographicData( sortedDivPlayers, divisionData, div, ladder )
   if infographic is not None:
+    year[ div ] = infographic
     dumpJson( outputBase, f"stats.{div}.json", asdict( infographic ) )
 
   if prevYearConfig is not None and unfilteredPrevYearData is not None and prevLadder is not None and prev_player_stats is not None and prevYearData is not None:
@@ -265,4 +268,7 @@ for div in divisions:
 
 if diff is not None:
   dumpJson( outputBase, 'diff.json', diff )
+if year is not None and len( year ) > 0:
+  dumpJson( outputBase, 'stats.json', year )
+
 print( "Complete" )
