@@ -32,7 +32,8 @@
             "name": "Statistics stuff",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/goldenBoot.py",
+            "program": "${workspaceFolder}/src/clubStats.py",
+            "args": "--year 8",
             "console": "integratedTerminal"
         }
     ]

@@ -20,6 +20,12 @@ uv venv
 uv sync
 ```
 
+And ensure that you install the playwright browsers before attempting to run the program.
+
+```
+playwright install
+```
+
 ### Data
 
 Firstly, you need a `data/config.json` file that contains the organisation as well as team information you need.
