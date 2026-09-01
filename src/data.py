@@ -72,12 +72,18 @@ def dumpJson( baseFolder, filename, jsonObject ):
     json.dump( jsonObject, f, indent=2, ensure_ascii=False, default=default )
 
 
-def loadJson( baseFolder, filename ):
-  with open( f"{baseFolder}/{filename}", "r" ) as f:
+def loadJson( baseFolder, filename ) -> None | Any:
+  qualifile = f"{baseFolder}/{filename}"
+  target = Path( qualifile )
+  if not target.exists():
+    return None
+  with open( qualifile, "r" ) as f:
     return json.load( f )
 
 
 def getDivByName( divisions, match ):
+  if divisions is None:
+    return None
   for d in divisions:
     if d[ 'div' ][ 'name' ] == match:
       return d
@@ -282,8 +288,8 @@ class InfoStats:
     rVal.avgGoalsPerRound = round( self.avgGoalsPerRound - other.avgGoalsPerRound, 2 )
     rVal.highestRoundGoals = self.highestRoundGoals - other.highestRoundGoals
     rVal.numRounds = self.numRounds - other.numRounds
-    rVal.top_scorer.value = int(self.top_scorer.value - other.top_scorer.value)
-    rVal.top_carder.value = int(self.top_carder.value - other.top_carder.value)
+    rVal.top_scorer.value = int( self.top_scorer.value - other.top_scorer.value )
+    rVal.top_carder.value = int( self.top_carder.value - other.top_carder.value )
     rVal.teams = self.teams - other.teams
     return rVal
 

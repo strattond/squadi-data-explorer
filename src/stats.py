@@ -64,13 +64,28 @@ def maxMatches( data ):
   return max( len( d.get( "matches", [] ) ) for d in data )
 
 
-def accumulatePlayersStats( data ) -> PlayerStats:
+def getMatchingUserMatch( userDivData, match ):
+  if userDivData is None:
+    return None
+  return next( ( uMatch[ 'match' ] for uMatch in userDivData[ 'matches' ] if uMatch[ 'match' ][ 'id' ] == match ), None )
+
+
+def getMatchingPlayer( name, userMatchNum ):
+  if userMatchNum is None:
+    return None
+  return next( ( userPlayer for userPlayer in userMatchNum[ 'players' ] if userPlayer[ 'name' ] == name ), None )
+
+
+def accumulatePlayersStats( data, userData ) -> PlayerStats:
 
   player_stats = PlayerStats()
   maxRounds = maxMatches( data )
   for division in data:
     divName = division[ "div" ][ 'name' ]
+    print( f" .. Processing {divName}" )
+    userDivData = getDivByName( userData, divName )
     for matchNum, match in enumerate( division.get( "matches", [] ) ):
+      userMatchNum = getMatchingUserMatch( userDivData, match[ 'match' ][ 'id' ] )
       for player in match[ "match" ].get( "players", [] ):
         name = player[ "name" ]
         stats = player_stats.get( name, maxRounds, divName )
@@ -83,7 +98,13 @@ def accumulatePlayersStats( data ) -> PlayerStats:
         divStats.block.goals[ matchNum ] = player.get( "goals", 0 )
         divStats.block.yellows[ matchNum ] = player.get( "yellows", 0 )
         divStats.block.reds[ matchNum ] = player.get( "reds", 0 )
-        divStats.block.starts[ matchNum ] = player.get( "started", 0 )
+        userPlayer = getMatchingPlayer( name, userMatchNum )
+        if userPlayer is not None:
+          # player.get( "started", 0 )
+          didStart = userPlayer.get( 'started', False )
+          divStats.block.starts[ matchNum ] = 0 if not didStart else 1
+        else:
+          divStats.block.starts[ matchNum ] = 0  # No matching user data says we have no start
 
   player_stats.accumulate( maxRounds )
   return player_stats
@@ -141,10 +162,10 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
   rVal.highestRoundGoals = int( highest_round_goals )
   rVal.numRounds = cumRounds
   rVal.top_scorer.name = top_scorer.name
-  rVal.top_scorer.value = int(top_scorer.goals)
+  rVal.top_scorer.value = int( top_scorer.goals )
 
   rVal.top_carder.name = top_carder.name
-  rVal.top_carder.value = int(top_carder.yellows + top_carder.reds)
+  rVal.top_carder.value = int( top_carder.yellows + top_carder.reds )
 
   rVal.teams = totals
   return rVal
@@ -203,10 +224,10 @@ def getInfographicData( player_stats: PlayerStats, divisionData, ladders ) -> In
   rVal.highestRound = highest_round + 1
   rVal.highestRoundGoals = int( highest_round_goals )
   rVal.numRounds = cumRounds
-  rVal.top_scorer.name = top_scorer[1].name
-  rVal.top_scorer.value = int(top_scorer[1].goals)
-  rVal.top_carder.name = top_carder[1].name
-  rVal.top_carder.value = int(top_carder[1].yellows + top_carder[1].reds)
+  rVal.top_scorer.name = top_scorer[ 1 ].name
+  rVal.top_scorer.value = int( top_scorer[ 1 ].goals )
+  rVal.top_carder.name = top_carder[ 1 ].name
+  rVal.top_carder.value = int( top_carder[ 1 ].yellows + top_carder[ 1 ].reds )
   rVal.teams = totals
   rVal.teams.avgRank = round( avg_rank, 1 )
   return rVal

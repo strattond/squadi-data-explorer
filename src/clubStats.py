@@ -110,6 +110,9 @@ args = parser.parse_args()
 
 print( "Loading configuration" )
 config = loadJson( 'data', 'config.json' )
+if config is None:
+  print( "Please provide a valid configuration file" )
+  sys.exit( 1 )
 
 print( f"Starting our squadi stats processing for year {args.year}" )
 
@@ -121,11 +124,13 @@ prevYearData = None
 if prevYearConfig is None:
   print( "Skipping Year on Year, no data" )
   unfilteredPrevYearData = None
+  unfilteredPrevYearUserData = None
   prevLadder = None
 else:
   print( "Loading prev year data" )
   prevOutputBase, prevPlotBase = getPaths( prevYearConfig )
   unfilteredPrevYearData = loadJson( prevOutputBase, 'matchDetails.json' )
+  unfilteredPrevYearUserData = loadJson( prevOutputBase, 'userMatchDetails.json' )
   prevLadder = loadJson( prevOutputBase, 'ladder.json' )
 
 outputFolder = Path( outputBase )
@@ -137,7 +142,8 @@ makeIfMissing( plotBase )
 
 print( "Loading data" )
 divisionData = loadJson( outputBase, 'matchDetails.json' )
-ladder = loadJson( outputBase, 'ladder.json' )
+userDivisionData = loadJson( outputBase, 'userMatchDetails.json' )
+ladder = loadJson( outputBase, 'ladder.json' ) or []
 
 print( " .. Getting unique players" )
 players = uniquePlayers( divisionData )
@@ -145,7 +151,7 @@ players = uniquePlayers( divisionData )
 print( " .. Getting divisions" )
 divisions = sortedDivisions( divisionData )
 print( "Accumulating stats" )
-player_stats = accumulatePlayersStats( divisionData )
+player_stats = accumulatePlayersStats( divisionData, userDivisionData )
 
 print( " .. Sorting by Goals" )
 topN = sorted( ( ( name, player.cumStats.goals ) for name, player in player_stats.stats.items() if player.goals > 2 ),
@@ -180,12 +186,16 @@ if infographic is not None:
   year[ 'overall' ] = infographic
 if prevYearConfig is not None and unfilteredPrevYearData is not None and prevLadder is not None:
   prevYearData = [ div for div in unfilteredPrevYearData if div[ 'div' ][ 'name' ] in divisions ]
-  prev_player_stats = accumulatePlayersStats( prevYearData )
+  if unfilteredPrevYearUserData is not None:
+    prevYearUserData = [ div for div in unfilteredPrevYearUserData if div[ 'div' ][ 'name' ] in divisions ]
+  else:
+    prevYearUserData = None
+  prev_player_stats = accumulatePlayersStats( prevYearData, prevYearUserData )
   print( " .. Last year" )
   prev_infographic = getInfographicData( prev_player_stats, prevYearData, prevLadder )
   if infographic is not None and prev_infographic is not None:
     diff[ 'overall' ] = infographic - prev_infographic
-    ufStats = accumulatePlayersStats( unfilteredPrevYearData )
+    ufStats = accumulatePlayersStats( unfilteredPrevYearData, unfilteredPrevYearUserData )
     crNames = [ p for p in player_stats.stats ]
     ppNames = [ p for p in ufStats.stats ]
     lstPlayers = [ name for name in ppNames if name not in crNames ]
@@ -194,7 +204,6 @@ if prevYearConfig is not None and unfilteredPrevYearData is not None and prevLad
     diff[ 'overall' ].newPlayers = len( newPlayers )
 else:
   prev_player_stats = None
-
 
 print( "Calculating borrowings" )
 rows = calculateBorrowings( player_stats, 2 )

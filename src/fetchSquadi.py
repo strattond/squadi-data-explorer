@@ -169,7 +169,14 @@ def processResultsData( div, json ):
           nexts.append( { 'div': div, 'match': createMatch( match, startTime )} )
 
     if len( matches ) > 0:
-      rounds.append( { 'round': round[ 'name' ], 'matches': matches} )
+      rounds.append( {
+          'round': {
+              'name': round[ 'name' ],
+              'id': round[ 'id' ],
+              'sequence': round[ 'sequence' ]
+          },
+          'matches': matches
+      } )
   results.append( { 'div': div, 'rounds': rounds} )
 
 
@@ -314,9 +321,16 @@ def calculateCards( cards ):
   return ( yellows, reds )
 
 
-def processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json ):
+def processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json, startTime ):
   global anyFetched
-  toAdd = { "match": { 'id': matchId, 'players': []}}
+  toAdd = {
+      "match": {
+          'id': matchId,
+          'date': noDelimTime( localTime( parseDateTime( startTime ) ) ),
+          'players': [],
+          'officials': []
+      }
+  }
   for player in json[ 'playing' ]:
     if player[ 'teamId' ] == teamOfInterest:
       # Got a player to add!
@@ -326,16 +340,22 @@ def processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json ):
           "name": player[ 'firstName' ] + " " + player[ 'lastName' ],
           "goals": player[ 'goals' ][ 0 ][ 'count' ] if len( player[ 'goals' ] ) > 0 else 0,
           "yellows": yellows,
-          "reds": reds,
-          "started": False
+          "reds": reds
       }
       toAdd[ 'match' ][ 'players' ].append( newPlayer )
+  for official in json[ 'teamOfficials' ]:
+    if official[ 'teamId' ] == teamOfInterest:
+      newOfficial = {
+          "role": official[ 'role' ],
+          "name": official[ 'firstName' ] + " " + official[ 'lastName' ],
+      }
+      toAdd[ 'match' ][ 'officials' ].append( newOfficial )
 
   existing.append( toAdd )
   anyFetched = True
 
 
-def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser ):
+def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser, startTime ):
   with browser.new_page() as page:
     matchURL = f"{matchRoot()}&matchId={str(matchId)}"
 
@@ -343,7 +363,7 @@ def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser 
       try:
         json = response.json()
         if '/gameSummary' in response.url:
-          processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json )
+          processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json, startTime )
       except Exception:
         pass
 
@@ -369,7 +389,7 @@ def fetchNewDetails( div, browser: Browser, existing ):
     for m in round[ 'matches' ]:
 
       matchId = m[ 'id' ]
-      print( ' ..', round[ 'round' ].ljust( 10 ), "Match", str( matchId ), end='' )
+      print( ' ..', round[ 'round' ][ 'name' ].ljust( 10 ), "Match", str( matchId ), end='' )
 
       # Firstly, let's see if we've fetched it - if we have, no need to process it!
       alreadyDone = False
@@ -388,7 +408,7 @@ def fetchNewDetails( div, browser: Browser, existing ):
         continue
 
       print( " .. Fetching match details" )
-      fetchMatchDetails( div, matchId, teamOfInterest, existing, browser )
+      fetchMatchDetails( div, matchId, teamOfInterest, existing, browser, m[ 'startTime' ] )
 
 
 def fetchDivNewDetails( div, browser: Browser, existing ):
@@ -417,10 +437,10 @@ def fetchDivNewDetails( div, browser: Browser, existing ):
 
 if args.match:
   print( "Loading existing data" )
-  ladders = loadJson( outputBase, 'ladder.json' )
-  results = loadJson( outputBase, 'results.json' )
-  nexts = loadJson( outputBase, 'next.json' )
-  recents = loadJson( outputBase, 'recent.json' )
+  ladders = loadJson( outputBase, 'ladder.json' ) or []
+  results = loadJson( outputBase, 'results.json' ) or []
+  nexts = loadJson( outputBase, 'next.json' ) or []
+  recents = loadJson( outputBase, 'recent.json' ) or []
 
 with sync_playwright() as p:
   browser = p.chromium.launch( headless=True )
