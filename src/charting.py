@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from data import Player
+from data import Player, SquadiDetails
 from stats import maxMatches
 
 
@@ -10,14 +10,14 @@ def figure_for_resolution( width_px, height_px, dpi=100 ):
   return plt.subplots( figsize=( width_px / dpi, height_px / dpi ), dpi=dpi )
 
 
-def plotStatsData( data, filename, sorted_stats: list[tuple[str, np.ndarray]], maxStat, labelY, title, withStep=False ):
+def plotStatsData( data: SquadiDetails, filename, sorted_stats: list[tuple[str, np.ndarray]], maxStat, labelY, title, withStep=False ):
   fig, ax = figure_for_resolution( 6000, 4000, dpi=100 )
 
   # Transparent backgrounds
   fig.patch.set_alpha( 0 )
   ax.patch.set_alpha( 0 )
 
-  cumRounds = maxMatches( data )
+  cumRounds = maxMatches( data.fixed )
   for i, ( name, value ) in enumerate( sorted_stats ):
     jitter = i * 0.03
     color = ax._get_lines.get_next_color()

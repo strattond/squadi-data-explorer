@@ -2,7 +2,23 @@ import re
 
 import numpy as np
 
-from data import InfoStats, Player, PlayerStats, TeamStats, getDivByName
+from data import (
+    DivisionDataFixed,
+    DivisionDataUser,
+    FixtureWrapperFixed,
+    FixtureWrapperUser,
+    InfoStats,
+    Ladder,
+    Player,
+    PlayerFixed,
+    PlayerStats,
+    PlayerUser,
+    SquadiDetails,
+    SquadiDetailsFixed,
+    SquadiDetailsUser,
+    TeamStats,
+    getDivByName,
+)
 
 
 def makeDivBlock( numRounds ):
@@ -40,54 +56,54 @@ def naturalNameKey( playerName ):
     return ''
 
 
-def uniquePlayers( data ):
+def uniquePlayers( data: SquadiDetailsFixed ) -> list[ PlayerFixed ]:
   unique_players = set()
 
-  for division in data:
-    for match in division.get( "matches", [] ):
-      for player in match[ "match" ].get( "players", [] ):
-        unique_players.add( player[ "name" ] )
+  for division in data.data:
+    for match in division.matches:
+      for player in match.match.players:
+        unique_players.add( player.name )
 
   return sorted( unique_players )
 
 
-def sortedDivisions( data ) -> list[ str ]:
+def sortedDivisions( data: SquadiDetailsFixed ) -> list[ str ]:
   all_divisions = set()
 
-  for division in data:
-    all_divisions.add( division[ "div" ][ 'name' ] )
+  for division in data.data:
+    all_divisions.add( division.div.name )
 
   return sorted( all_divisions, key=mixedDivKey )
 
 
-def maxMatches( data ):
-  return max( len( d.get( "matches", [] ) ) for d in data )
+def maxMatches( data: SquadiDetailsFixed | SquadiDetailsUser ):
+  return max( len( d.matches ) for d in data.data )
 
 
-def getMatchingUserMatch( userDivData, match ):
+def getMatchingUserMatch( userDivData: DivisionDataFixed | DivisionDataUser | None, match ):
   if userDivData is None:
     return None
-  return next( ( uMatch[ 'match' ] for uMatch in userDivData[ 'matches' ] if uMatch[ 'match' ][ 'id' ] == match ), None )
+  return next( ( uMatch for uMatch in userDivData.matches if uMatch.match.id == match ), None )
 
 
-def getMatchingPlayer( name, userMatchNum ):
+def getMatchingPlayer( name, userMatchNum: FixtureWrapperFixed | FixtureWrapperUser | None ):
   if userMatchNum is None:
     return None
-  return next( ( userPlayer for userPlayer in userMatchNum[ 'players' ] if userPlayer[ 'name' ] == name ), None )
+  return next( ( userPlayer for userPlayer in userMatchNum.match.players if userPlayer.name == name ), None )
 
 
-def accumulatePlayersStats( data, userData ) -> PlayerStats:
+def accumulatePlayersStats( data: SquadiDetails ) -> PlayerStats:
 
   player_stats = PlayerStats()
-  maxRounds = maxMatches( data )
-  for division in data:
-    divName = division[ "div" ][ 'name' ]
+  maxRounds = maxMatches( data.fixed )
+  for division in data.fixed.data:
+    divName = division.div.name
     print( f" .. Processing {divName}" )
-    userDivData = getDivByName( userData, divName )
-    for matchNum, match in enumerate( division.get( "matches", [] ) ):
-      userMatchNum = getMatchingUserMatch( userDivData, match[ 'match' ][ 'id' ] )
-      for player in match[ "match" ].get( "players", [] ):
-        name = player[ "name" ]
+    userDivData = getDivByName( data.user.data, divName )
+    for matchNum, match in enumerate( division.matches ):
+      userMatchNum = getMatchingUserMatch( userDivData, match.match.id )
+      for player in match.match.players:
+        name = player.name
         stats = player_stats.get( name, maxRounds, divName )
 
         # appearances
@@ -95,13 +111,13 @@ def accumulatePlayersStats( data, userData ) -> PlayerStats:
         divStats.block.appearances[ matchNum ] = 1
 
         # goals/yellows/reds may not exist on this record
-        divStats.block.goals[ matchNum ] = player.get( "goals", 0 )
-        divStats.block.yellows[ matchNum ] = player.get( "yellows", 0 )
-        divStats.block.reds[ matchNum ] = player.get( "reds", 0 )
+        divStats.block.goals[ matchNum ] = player.goals
+        divStats.block.yellows[ matchNum ] = player.yellows
+        divStats.block.reds[ matchNum ] = player.reds
         userPlayer = getMatchingPlayer( name, userMatchNum )
-        if userPlayer is not None:
+        if userPlayer is not None and isinstance( userPlayer, PlayerUser ):
           # player.get( "started", 0 )
-          didStart = userPlayer.get( 'started', False )
+          didStart = userPlayer.started
           divStats.block.starts[ matchNum ] = 0 if not didStart else 1
         else:
           divStats.block.starts[ matchNum ] = 0  # No matching user data says we have no start
@@ -117,9 +133,11 @@ def list_to_dict( listData: list[ tuple[ str, Player ] ] ) -> dict[ str, Player 
   return rVal
 
 
-def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, div: str, ladders ) -> InfoStats | None:
+def getTeamInfographicData(
+    player_stats: list[ tuple[ str, Player ] ], data: SquadiDetails, div: str, ladders: list[ Ladder ]
+) -> InfoStats | None:
 
-  divDetail = getDivByName( data, div )
+  divDetail = getDivByName( data.fixed.data, div )
   if divDetail is None:
     return None
   divPlayers = list_to_dict( player_stats )
@@ -127,7 +145,7 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
   # Time to Slice and Dice
   sliced = [ player.slice( div ) for player in divPlayers.values() ]
 
-  cumRounds = len( divDetail[ 'matches' ] )  # maxMatches( data )
+  cumRounds = len( divDetail.matches )  # maxMatches( data )
   total_goals = sum( player.goals for player in sliced )
   total_yellows = sum( player.yellows for player in sliced )
   total_reds = sum( player.reds for player in sliced )
@@ -147,7 +165,7 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
   top_scorer = max( sliced, key=lambda item: item.goals )
   top_carder = max( sliced, key=lambda item: ( item.yellows + item.reds ) )
 
-  teamIDs = [ int( divDetail[ 'div' ][ 'teamId' ] ) ]
+  teamIDs = [ divDetail.div.teamId ]
   totals = getTotalsForTeams( ladders, teamIDs )
 
   rVal = InfoStats()
@@ -171,22 +189,19 @@ def getTeamInfographicData( player_stats: list[ tuple[ str, Player ] ], data, di
   return rVal
 
 
-def getTotalsForTeams( ladders, teamIDs ) -> TeamStats:
+def getTotalsForTeams( ladders: list[ Ladder ], teamIDs: list[ int ] ) -> TeamStats:
   totals = TeamStats()
   for ladder in ladders:
-    for row in ladder[ 'table' ]:
-      if row[ 'teamId' ] in teamIDs:
-        totals.wins += row[ "GamesWon" ]
-        totals.draws += row[ "GamesDrawn" ]
-        totals.losses += row[ "GamesLost" ]
-        totals.gf += row[ "GoalsFor" ]
-        totals.ga += row[ "GoalsAgainst" ]
-        totals.avgRank += row[ "Rank" ]
+    for row in ladder.table:
+      if row.teamId in teamIDs:
+        totals.add( row )
 
   return totals
 
 
-def getInfographicData( player_stats: PlayerStats, divisionData, ladders ) -> InfoStats | None:
+def getInfographicData(
+    player_stats: PlayerStats, divisionData: SquadiDetailsFixed, ladders: list[ Ladder ]
+) -> InfoStats | None:
 
   cumRounds = maxMatches( divisionData )
   total_goals = int( sum( stats.goals for stats in player_stats.stats.values() ) )
@@ -208,7 +223,7 @@ def getInfographicData( player_stats: PlayerStats, divisionData, ladders ) -> In
   top_scorer = max( player_stats.stats.items(), key=lambda item: item[ 1 ].goals )
   top_carder = max( player_stats.stats.items(), key=lambda item: ( item[ 1 ].yellows + item[ 1 ].reds ) )
 
-  teamIDs = [ int( div[ 'div' ][ 'teamId' ] ) for div in divisionData ]
+  teamIDs = [ div.div.teamId for div in divisionData.data ]
   totals = getTotalsForTeams( ladders, teamIDs )
 
   avg_rank = totals.avgRank / len( teamIDs ) if len( teamIDs ) else 0

@@ -86,13 +86,37 @@ def loadJson( baseFolder, filename ) -> None | Any:
     return json.load( f )
 
 
-def getDivByName( divisions, match ):
-  if divisions is None:
+def loadDivisionDataFixed( baseFolder, filename ) -> tuple[ bool, SquadiDetailsFixed ]:
+  tmd = loadJson( baseFolder, filename )
+  if tmd is None:
+    return ( False, SquadiDetailsFixed() )
+  return ( True, SquadiDetailsFixed( data=[ from_dict( DivisionDataFixed, d ) for d in tmd ] ) )
+
+
+def loadDivisionDataUser( baseFolder, filename ) -> tuple[ bool, SquadiDetailsUser ]:
+  tmd = loadJson( baseFolder, filename )
+  if tmd is None:
+    return ( False, SquadiDetailsUser() )
+  return ( True, SquadiDetailsUser( data=[ from_dict( DivisionDataUser, d ) for d in tmd ] ) )
+
+
+def loadLadder( baseFolder, filename ) -> list[ Ladder ]:
+  ladderData = loadJson( baseFolder, filename )
+  return [ from_dict( Ladder, d ) for d in ladderData ] if ladderData else []
+
+
+def loadSquadiDetails( baseFolder, fixedName, userName ) -> SquadiDetails:
+  fixedF, fixedD = loadDivisionDataFixed( baseFolder, fixedName )
+  userF, userD = loadDivisionDataUser( baseFolder, userName )
+  return SquadiDetails( fixedD, userD, fixedF, userF )
+
+
+def getDivByName(
+    divisions: list[ DivisionDataFixed ] | list[ DivisionDataUser ], match
+) -> DivisionDataFixed | DivisionDataUser | None:
+  if len( divisions ) == 0:
     return None
-  for d in divisions:
-    if d[ 'div' ][ 'name' ] == match:
-      return d
-  return None
+  return next( ( d for d in divisions if d.div.name == match ), None )
 
 
 def maskedSum( arrayOfArrays ) -> ndarray:
@@ -150,6 +174,11 @@ class FixtureWrapperFixed:
 
 
 @dataclass
+class FixtureWrapperUser:
+  match: FixtureUser
+
+
+@dataclass
 class FixtureUser:
   id: int
   players: list[ PlayerUser ] = field( default_factory=list )
@@ -164,7 +193,7 @@ class DivisionDataFixed:
 @dataclass
 class DivisionDataUser:
   div: Division
-  matches: list[ FixtureUser ] = field( default_factory=list )
+  matches: list[ FixtureWrapperUser ] = field( default_factory=list )
 
 
 @dataclass
@@ -175,6 +204,26 @@ class SquadiDetailsFixed:
 @dataclass
 class SquadiDetailsUser:
   data: list[ DivisionDataUser ] = field( default_factory=list )
+
+
+@dataclass
+class SquadiDetails:
+  fixed: SquadiDetailsFixed = field( default_factory=SquadiDetailsFixed )
+  user: SquadiDetailsUser = field( default_factory=SquadiDetailsUser )
+  fixedFound: bool = False
+  userFound: bool = False
+
+  def slice( self, divisions: list[ str ] ):
+
+    slicedF = [ div for div in self.fixed.data if div.div.name in divisions ] if self.fixedFound else []
+    slicedU = [ div for div in self.user.data if div.div.name in divisions ] if self.userFound else []
+
+    return SquadiDetails(
+        fixed=SquadiDetailsFixed( data=slicedF ),
+        user=SquadiDetailsUser( data=slicedU ),
+        fixedFound=self.fixedFound,
+        userFound=self.userFound
+    )
 
 
 @dataclass
@@ -293,7 +342,7 @@ class Player:
 class PlayerStats:
   stats: dict[ str, Player ] = field( default_factory=dict )
 
-  def get( self, name, maxRounds, divName ):
+  def get( self, name: str, maxRounds: int, divName: str ):
 
     rVal = self.stats.get( name )
     if rVal is None:
@@ -333,6 +382,14 @@ class TeamStats:
     rVal.ga = self.ga - other.ga
     rVal.avgRank = round( self.avgRank - other.avgRank, 1 )
     return rVal
+
+  def add( self, other: LadderEntry ):  # Mutate in place
+    self.wins += other.GamesWon
+    self.draws += other.GamesDrawn
+    self.losses += other.GamesLost
+    self.gf += other.GoalsFor
+    self.ga += other.GoalsAgainst
+    self.avgRank += other.Rank
 
 
 @dataclass
