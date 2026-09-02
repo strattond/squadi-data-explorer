@@ -2,7 +2,7 @@ import json
 import os
 import re
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import MISSING, asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -72,6 +72,11 @@ def dumpJson( baseFolder, filename, jsonObject ):
     json.dump( jsonObject, f, indent=2, ensure_ascii=False, default=default )
 
 
+def dumpJsonStructured( baseFolder, filename, jsonObject ):
+  with open( f"{baseFolder}/{filename}", "w", encoding='utf-8' ) as f:
+    json.dump( [ asdict( d ) for d in jsonObject ], f, indent=2, ensure_ascii=False, default=default )
+
+
 def loadJson( baseFolder, filename ) -> None | Any:
   qualifile = f"{baseFolder}/{filename}"
   target = Path( qualifile )
@@ -97,6 +102,76 @@ def maskedSum( arrayOfArrays ) -> ndarray:
   mask_all_nan = np.all( [ np.isnan( a ) for a in arrayOfArrays ], axis=0 )
   summed[ mask_all_nan ] = np.nan
   return summed
+
+
+@dataclass
+class Division:
+  name: str
+  divisionId: int
+  teamId: int
+
+
+@dataclass
+class PlayerFixed:
+  shirt: int
+  name: str
+  goals: int
+  yellows: int
+  reds: int
+
+
+@dataclass
+class PlayerUser:
+  name: str
+  started: bool
+  position: str
+
+
+@dataclass
+class Official:
+  name: str
+  role: str
+
+
+@dataclass
+class FixtureFixed:
+  id: int
+  date: str
+  players: list[ PlayerFixed ] = field( default_factory=list )
+  officials: list[ Official ] = field( default_factory=list )
+
+
+@dataclass
+class FixtureWrapperFixed:
+  match: FixtureFixed
+
+
+@dataclass
+class FixtureUser:
+  id: int
+  players: list[ PlayerUser ] = field( default_factory=list )
+
+
+@dataclass
+class DivisionDataFixed:
+  div: Division
+  matches: list[ FixtureWrapperFixed ] = field( default_factory=list )
+
+
+@dataclass
+class DivisionDataUser:
+  div: Division
+  matches: list[ FixtureUser ] = field( default_factory=list )
+
+
+@dataclass
+class SquadiDetailsFixed:
+  data: list[ DivisionDataFixed ] = field( default_factory=list )
+
+
+@dataclass
+class SquadiDetailsUser:
+  data: list[ DivisionDataUser ] = field( default_factory=list )
 
 
 @dataclass
@@ -301,3 +376,43 @@ def playerPlayedInDivision( stats: Player, div ):
 def getPlayersForDiv( player_stats: PlayerStats, div: str ) -> list[ tuple[ str, Player ] ]:
   divPlayers = { name: player for name, player in player_stats.stats.items() if playerPlayedInDivision( player, div ) }
   return sorted( divPlayers.items(), key=lambda item: ( -np.nansum( item[ 1 ].stats[ div ].block.appearances ), item[ 0 ] ) )
+
+
+def from_dict( cls, data ):
+  if not isinstance( data, dict ):
+    return data
+
+  kwargs = {}
+  for field_name, field_def in cls.__dataclass_fields__.items():
+    typ = field_def.type
+
+    # Field missing in JSON
+    if field_name not in data:
+      if field_def.default is not MISSING:
+        kwargs[ field_name ] = field_def.default
+      elif field_def.default_factory is not MISSING:
+        kwargs[ field_name ] = field_def.default_factory()
+      else:
+        kwargs[ field_name ] = None
+      continue
+
+    value = data[ field_name ]
+
+    # Nested dataclass
+    if hasattr( typ, "__dataclass_fields__" ):
+      kwargs[ field_name ] = from_dict( typ, value )
+
+    # List[T]
+    elif getattr( typ, "__origin__", None ) is list:
+      inner = typ.__args__[ 0 ]
+      kwargs[ field_name ] = [ from_dict( inner, item ) for item in value ]
+
+    # Dict[str, T]
+    elif getattr( typ, "__origin__", None ) is dict:
+      inner = typ.__args__[ 1 ]
+      kwargs[ field_name ] = { k: from_dict( inner, v ) for k, v in value.items() }
+
+    else:
+      kwargs[ field_name ] = value
+
+  return cls( **kwargs )

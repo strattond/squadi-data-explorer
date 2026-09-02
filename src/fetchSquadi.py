@@ -6,7 +6,25 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, Page, Response, sync_playwright
 
-from data import cleanTeam, cleanVenue, dumpJson, getMatchingConfig, getPaths, loadJson, makeIfMissing, sanitiseTeam
+from data import (
+    Division,
+    DivisionDataFixed,
+    FixtureFixed,
+    FixtureWrapperFixed,
+    Official,
+    PlayerFixed,
+    SquadiDetailsFixed,
+    cleanTeam,
+    cleanVenue,
+    dumpJson,
+    dumpJsonStructured,
+    from_dict,
+    getMatchingConfig,
+    getPaths,
+    loadJson,
+    makeIfMissing,
+    sanitiseTeam,
+)
 
 parser = argparse.ArgumentParser(
     prog="Squadi Parser", description="Parses data from squadi into JSON format for further processing"
@@ -52,7 +70,7 @@ def matchRoot():
 
 ladders = []
 results = []
-teamMatchDetails = []
+teamMatchDetails = SquadiDetailsFixed()
 divMatchDetails = []
 loadedMatchDetails = False
 loadedDivMatchDetails = False
@@ -244,12 +262,14 @@ def fetchDivisionLadderAndResults( div, page: Page ):
   page.wait_for_load_state( "networkidle" )
 
 
-def pushBlankDiv( div ):
+def pushBlankDiv( div ) -> list[ FixtureWrapperFixed ]:
   global anyFetched
-  added = { "div": div, "matches": []}
-  teamMatchDetails.append( added )
+  added = DivisionDataFixed(
+      div=Division( name=div[ 'name' ], divisionId=int( div[ 'divisionId' ] ), teamId=int( div[ 'teamId' ] ) )
+  )
+  teamMatchDetails.data.append( added )
   anyFetched = True
-  return added[ 'matches' ]
+  return added.matches
 
 
 def pushBlankFullDiv( div ):
@@ -278,19 +298,21 @@ def loadFullExistingDetails( div ):
   return pushBlankFullDiv( div )
 
 
-def loadExistingDetails( div ):
+def loadExistingDetails( div ) -> list[ FixtureWrapperFixed ]:
   global loadedMatchDetails, teamMatchDetails
   p = Path( f"{outputBase}/matchDetails.json" )
   if not p.exists():
     return pushBlankDiv( div )
   if not loadedMatchDetails:
+    tmd = None
     with open( f"{outputBase}/matchDetails.json", 'r' ) as f:
-      teamMatchDetails = json.load( f )
+      tmd = json.load( f )
     loadedMatchDetails = True
+    teamMatchDetails = SquadiDetailsFixed( data=[ from_dict( DivisionDataFixed, d ) for d in tmd ] )
 
-  for i in teamMatchDetails:
-    if i[ 'div' ][ 'divisionId' ] == div[ 'divisionId' ]:
-      return i[ 'matches' ]
+  for i in teamMatchDetails.data:
+    if i.div.divisionId == div[ 'divisionId' ]:
+      return i.matches
 
   # If we get to this point, it didn't exist in the cached results, so add a blank one
   return pushBlankDiv( div )
@@ -321,49 +343,39 @@ def calculateCards( cards ):
   return ( yellows, reds )
 
 
-def processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json, startTime ):
+def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ FixtureWrapperFixed ], json, startTime ):
   global anyFetched
-  toAdd = {
-      "match": {
-          'id': matchId,
-          'date': noDelimTime( localTime( parseDateTime( startTime ) ) ),
-          'players': [],
-          'officials': []
-      }
-  }
+  toAdd = FixtureWrapperFixed( match=FixtureFixed( id=matchId, date=noDelimTime( localTime( parseDateTime( startTime ) ) ) ) )
   for player in json[ 'playing' ]:
     if player[ 'teamId' ] == teamOfInterest:
       # Got a player to add!
       yellows, reds = calculateCards( player[ 'cards' ] )
-      newPlayer = {
-          "shirt": int( player[ 'shirt' ] ),
-          "name": player[ 'firstName' ] + " " + player[ 'lastName' ],
-          "goals": player[ 'goals' ][ 0 ][ 'count' ] if len( player[ 'goals' ] ) > 0 else 0,
-          "yellows": yellows,
-          "reds": reds
-      }
-      toAdd[ 'match' ][ 'players' ].append( newPlayer )
+      newPlayer = PlayerFixed(
+          shirt=int( player[ 'shirt' ] ),
+          name=player[ 'firstName' ] + " " + player[ 'lastName' ],
+          goals=player[ 'goals' ][ 0 ][ 'count' ] if len( player[ 'goals' ] ) > 0 else 0,
+          yellows=yellows,
+          reds=reds
+      )
+      toAdd.match.players.append( newPlayer )
   for official in json[ 'teamOfficials' ]:
     if official[ 'teamId' ] == teamOfInterest:
-      newOfficial = {
-          "role": official[ 'role' ],
-          "name": official[ 'firstName' ] + " " + official[ 'lastName' ],
-      }
-      toAdd[ 'match' ][ 'officials' ].append( newOfficial )
+      newOfficial = Official( role=official[ 'role' ], name=official[ 'firstName' ] + " " + official[ 'lastName' ] )
+      toAdd.match.officials.append( newOfficial )
 
   existing.append( toAdd )
   anyFetched = True
 
 
-def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser, startTime ):
+def fetchMatchDetails( matchId, teamOfInterest, existing: list[ FixtureWrapperFixed ], browser: Browser, startTime ):
   with browser.new_page() as page:
-    matchURL = f"{matchRoot()}&matchId={str(matchId)}"
+    matchURL = f"{matchRoot()}&matchId={matchId}"
 
     def handle_response( response: Response ) -> None:
       try:
         json = response.json()
         if '/gameSummary' in response.url:
-          processFetchedMatchDetails( div, matchId, teamOfInterest, existing, json, startTime )
+          processFetchedMatchDetails( matchId, teamOfInterest, existing, json, startTime )
       except Exception:
         pass
 
@@ -376,7 +388,7 @@ def fetchMatchDetails( div, matchId, teamOfInterest, existing, browser: Browser,
     page.wait_for_load_state( "networkidle" )
 
 
-def fetchNewDetails( div, browser: Browser, existing ):
+def fetchNewDetails( div, browser: Browser, existing: list[ FixtureWrapperFixed ] ):
   global anyFetched
   # So, we only care about results, and results -we don't already have-
   divResults = getDivResults( div )
@@ -394,13 +406,13 @@ def fetchNewDetails( div, browser: Browser, existing ):
       # Firstly, let's see if we've fetched it - if we have, no need to process it!
       alreadyDone = False
       for eligible in existing:
-        if int( eligible[ 'match' ][ 'id' ] ) == matchId:
+        if eligible.match.id == matchId:
           print( " .. Matched!" )
           alreadyDone = True
           # But let's check ...
-          if 'date' not in eligible[ 'match' ]:
+          if eligible.match.date == '':
             # Copy the date!
-            eligible[ 'match' ][ 'date' ] = noDelimTime( localTime( parseDateTime( m[ 'startTime' ] ) ) )
+            eligible.match.date = noDelimTime( localTime( parseDateTime( m[ 'startTime' ] ) ) )
             anyFetched = True
           break
 
@@ -408,7 +420,7 @@ def fetchNewDetails( div, browser: Browser, existing ):
         continue
 
       print( " .. Fetching match details" )
-      fetchMatchDetails( div, matchId, teamOfInterest, existing, browser, m[ 'startTime' ] )
+      fetchMatchDetails( matchId, teamOfInterest, existing, browser, m[ 'startTime' ] )
 
 
 def fetchDivNewDetails( div, browser: Browser, existing ):
@@ -466,7 +478,7 @@ if args.summary:
   dumpJson( outputBase, 'recent.json', recents )
 
 if args.match and anyFetched:
-  dumpJson( outputBase, 'matchDetails.json', teamMatchDetails )
+  dumpJsonStructured( outputBase, 'matchDetails.json', teamMatchDetails.data )
 
 if args.div:
   dumpJson( outputBase, 'divMatchDetails.json', divMatchDetails )

@@ -7,10 +7,13 @@ import numpy as np
 
 from charting import drawColourChart, plotRowData, plotStatsData
 from data import (
+    DivisionDataFixed,
     InfoStats,
     Player,
     PlayerStats,
+    SquadiDetailsFixed,
     dumpJson,
+    from_dict,
     getDivByName,
     getMatchingConfig,
     getPaths,
@@ -142,6 +145,8 @@ makeIfMissing( plotBase )
 
 print( "Loading data" )
 divisionData = loadJson( outputBase, 'matchDetails.json' )
+if divisionData is not None:
+  asClass = SquadiDetailsFixed( data=[from_dict( DivisionDataFixed, d ) for d in divisionData] )
 userDivisionData = loadJson( outputBase, 'userMatchDetails.json' )
 ladder = loadJson( outputBase, 'ladder.json' ) or []
 
