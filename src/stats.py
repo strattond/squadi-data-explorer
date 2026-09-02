@@ -2,6 +2,7 @@ import re
 
 import numpy as np
 
+import blended
 import fixed
 import user
 from data import (
@@ -9,7 +10,6 @@ from data import (
     Ladder,
     Player,
     PlayerStats,
-    SquadiDetails,
     TeamStats,
     getDivByName,
 )
@@ -50,7 +50,7 @@ def naturalNameKey( playerName ):
     return ''
 
 
-def uniquePlayers( data: fixed.SquadiDetails ) -> list[ fixed.Player ]:
+def uniquePlayers( data: blended.SquadiDetails ) -> list[ blended.Player ]:
   unique_players = set()
 
   for division in data.data:
@@ -61,7 +61,7 @@ def uniquePlayers( data: fixed.SquadiDetails ) -> list[ fixed.Player ]:
   return sorted( unique_players )
 
 
-def sortedDivisions( data: fixed.SquadiDetails ) -> list[ str ]:
+def sortedDivisions( data: blended.SquadiDetails ) -> list[ str ]:
   all_divisions = set()
 
   for division in data.data:
@@ -70,7 +70,7 @@ def sortedDivisions( data: fixed.SquadiDetails ) -> list[ str ]:
   return sorted( all_divisions, key=mixedDivKey )
 
 
-def maxMatches( data: fixed.SquadiDetails | user.SquadiDetails ):
+def maxMatches( data: fixed.SquadiDetails | user.SquadiDetails | blended.SquadiDetails ):
   return max( len( d.matches ) for d in data.data )
 
 
@@ -86,16 +86,14 @@ def getMatchingPlayer( name, userMatchNum: fixed.FixtureWrapper | user.FixtureWr
   return next( ( userPlayer for userPlayer in userMatchNum.match.players if userPlayer.name == name ), None )
 
 
-def accumulatePlayersStats( data: SquadiDetails ) -> PlayerStats:
+def accumulatePlayersStats( data: blended.SquadiDetails ) -> PlayerStats:
 
   player_stats = PlayerStats()
-  maxRounds = maxMatches( data.fixed )
-  for division in data.fixed.data:
+  maxRounds = maxMatches( data )
+  for division in data.data:
     divName = division.div.name
     print( f" .. Processing {divName}" )
-    userDivData = getDivByName( data.user.data, divName )
     for matchNum, match in enumerate( division.matches ):
-      userMatchNum = getMatchingUserMatch( userDivData, match.match.id )
       for player in match.match.players:
         name = player.name
         stats = player_stats.get( name, maxRounds, divName )
@@ -108,13 +106,9 @@ def accumulatePlayersStats( data: SquadiDetails ) -> PlayerStats:
         divStats.block.goals[ matchNum ] = player.goals
         divStats.block.yellows[ matchNum ] = player.yellows
         divStats.block.reds[ matchNum ] = player.reds
-        userPlayer = getMatchingPlayer( name, userMatchNum )
-        if userPlayer is not None and isinstance( userPlayer, user.Player ):
-          # player.get( "started", 0 )
-          didStart = userPlayer.started
-          divStats.block.starts[ matchNum ] = 0 if not didStart else 1
-        else:
-          divStats.block.starts[ matchNum ] = 0  # No matching user data says we have no start
+        # player.get( "started", 0 )
+        didStart = player.started
+        divStats.block.starts[ matchNum ] = 0 if not didStart else 1
 
   player_stats.accumulate( maxRounds )
   return player_stats
@@ -128,10 +122,10 @@ def list_to_dict( listData: list[ tuple[ str, Player ] ] ) -> dict[ str, Player 
 
 
 def getTeamInfographicData(
-    player_stats: list[ tuple[ str, Player ] ], data: SquadiDetails, div: str, ladders: list[ Ladder ]
+    player_stats: list[ tuple[ str, Player ] ], data: blended.SquadiDetails, div: str, ladders: list[ Ladder ]
 ) -> InfoStats | None:
 
-  divDetail = getDivByName( data.fixed.data, div )
+  divDetail = getDivByName( data.data, div )
   if divDetail is None:
     return None
   divPlayers = list_to_dict( player_stats )
@@ -194,7 +188,7 @@ def getTotalsForTeams( ladders: list[ Ladder ], teamIDs: list[ int ] ) -> TeamSt
 
 
 def getInfographicData(
-    player_stats: PlayerStats, divisionData: fixed.SquadiDetails, ladders: list[ Ladder ]
+    player_stats: PlayerStats, divisionData: blended.SquadiDetails, ladders: list[ Ladder ]
 ) -> InfoStats | None:
 
   cumRounds = maxMatches( divisionData )

@@ -1,6 +1,8 @@
+import json
 import sys
 from dataclasses import MISSING, dataclass
-from typing import ForwardRef, Optional, get_args, get_origin
+from pathlib import Path
+from typing import Any, ForwardRef, Optional, get_args, get_origin
 
 
 @dataclass
@@ -70,3 +72,13 @@ def from_dict( cls, data ):
       kwargs[ field_name ] = value
 
   return cls( **kwargs )
+
+def loadJson( baseFolder, filename ) -> None | Any:
+  qualifile = f"{baseFolder}/{filename}"
+  target = Path( qualifile )
+  if not target.exists():
+    return None
+  with open( qualifile, "r" ) as f:
+    return json.load( f )
+
+

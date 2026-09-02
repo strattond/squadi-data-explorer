@@ -7,12 +7,12 @@ import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from numpy import ndarray
 
-import fixed
+import blended
+import fixed as fx
 import shared
 import user
 
@@ -81,29 +81,20 @@ def dumpJsonStructured( baseFolder, filename, jsonObject ):
     json.dump( [ asdict( d ) for d in jsonObject ], f, indent=2, ensure_ascii=False, default=default )
 
 
-def loadJson( baseFolder, filename ) -> None | Any:
-  qualifile = f"{baseFolder}/{filename}"
-  target = Path( qualifile )
-  if not target.exists():
-    return None
-  with open( qualifile, "r" ) as f:
-    return json.load( f )
-
-
 def loadLadder( baseFolder, filename ) -> list[ Ladder ]:
-  ladderData = loadJson( baseFolder, filename )
+  ladderData = shared.loadJson( baseFolder, filename )
   return [ shared.from_dict( Ladder, d ) for d in ladderData ] if ladderData else []
 
 
 def loadSquadiDetails( baseFolder, fixedName, userName ) -> SquadiDetails:
-  fixedF, fixedD = fixed.loadDivisionData( baseFolder, fixedName )
+  fixedF, fixedD = fx.loadDivisionData( baseFolder, fixedName )
   userF, userD = user.loadDivisionData( baseFolder, userName )
   return SquadiDetails( fixedD, userD, fixedF, userF )
 
 
 def getDivByName(
-    divisions: list[ fixed.DivisionData ] | list[ user.DivisionData ], match
-) -> fixed.DivisionData | user.DivisionData | None:
+    divisions: list[ blended.DivisionData ], match
+) -> blended.DivisionData | None:
   if len( divisions ) == 0:
     return None
   return next( ( d for d in divisions if d.div.name == match ), None )
@@ -123,23 +114,10 @@ def maskedSum( arrayOfArrays ) -> ndarray:
 
 @dataclass
 class SquadiDetails:
-  fixed: fixed.SquadiDetails = field( default_factory=fixed.SquadiDetails )
-  user: user.SquadiDetails = field( default_factory=user.SquadiDetails )
+  fixedD: fx.SquadiDetails = field( default_factory=fx.SquadiDetails )
+  userD: user.SquadiDetails = field( default_factory=user.SquadiDetails )
   fixedFound: bool = False
   userFound: bool = False
-
-  def slice( self, divisions: list[ str ] ):
-
-    slicedF = [ div for div in self.fixed.data if div.div.name in divisions ] if self.fixedFound else []
-    slicedU = [ div for div in self.user.data if div.div.name in divisions ] if self.userFound else []
-
-    return SquadiDetails(
-        fixed=fixed.SquadiDetails( data=slicedF ),
-        user=user.SquadiDetails( data=slicedU ),
-        fixedFound=self.fixedFound,
-        userFound=self.userFound
-    )
-
 
 @dataclass
 class StatBlock:

@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import data
 import shared
 
 
 def loadDivisionData( baseFolder, filename ) -> tuple[ bool, SquadiDetails ]:
-  tmd = data.loadJson( baseFolder, filename )
+  tmd = shared.loadJson( baseFolder, filename )
   if tmd is None:
     return ( False, SquadiDetails() )
   return ( True, SquadiDetails( data=[ shared.from_dict( DivisionData, d ) for d in tmd ] ) )

@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from data import Player, SquadiDetails
+import blended
+from data import Player
 from stats import maxMatches
 
 
@@ -10,14 +11,22 @@ def figure_for_resolution( width_px, height_px, dpi=100 ):
   return plt.subplots( figsize=( width_px / dpi, height_px / dpi ), dpi=dpi )
 
 
-def plotStatsData( data: SquadiDetails, filename, sorted_stats: list[tuple[str, np.ndarray]], maxStat, labelY, title, withStep=False ):
+def plotStatsData(
+    data: blended.SquadiDetails,
+    filename,
+    sorted_stats: list[ tuple[ str, np.ndarray ] ],
+    maxStat,
+    labelY,
+    title,
+    withStep=False
+):
   fig, ax = figure_for_resolution( 6000, 4000, dpi=100 )
 
   # Transparent backgrounds
   fig.patch.set_alpha( 0 )
   ax.patch.set_alpha( 0 )
 
-  cumRounds = maxMatches( data.fixed )
+  cumRounds = maxMatches( data )
   for i, ( name, value ) in enumerate( sorted_stats ):
     jitter = i * 0.03
     color = ax._get_lines.get_next_color()
@@ -76,7 +85,8 @@ def plotRowData( col_labels, rows, filename, width=3000, height=2000, vScale=4, 
 
 
 def drawColourChart(
-    colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str, rowData: list[tuple[str, Player]], div: str, plotBase: str
+    colors, numCols: int, numRows: int, colLabels: list, rowLabels: list, dataMatrix, filename: str,
+    rowData: list[ tuple[ str, Player ] ], div: str, plotBase: str
 ):
 
   cellW = 40
@@ -146,4 +156,3 @@ def drawColourChart(
           img.paste( football_sm, ( x + ( cellW-wd ) // 2, y + ( cellH-wd ) // 2 ), football_sm )
 
   img.save( f"{plotBase}/{filename}.png" )
-
