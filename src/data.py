@@ -4,13 +4,17 @@ import json
 import os
 import re
 import sys
-from dataclasses import MISSING, asdict, dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ForwardRef, Optional, get_args, get_origin
+from typing import Any
 
 import numpy as np
 from numpy import ndarray
+
+import fixed
+import shared
+import user
 
 pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
 
@@ -86,34 +90,20 @@ def loadJson( baseFolder, filename ) -> None | Any:
     return json.load( f )
 
 
-def loadDivisionDataFixed( baseFolder, filename ) -> tuple[ bool, SquadiDetailsFixed ]:
-  tmd = loadJson( baseFolder, filename )
-  if tmd is None:
-    return ( False, SquadiDetailsFixed() )
-  return ( True, SquadiDetailsFixed( data=[ from_dict( DivisionDataFixed, d ) for d in tmd ] ) )
-
-
-def loadDivisionDataUser( baseFolder, filename ) -> tuple[ bool, SquadiDetailsUser ]:
-  tmd = loadJson( baseFolder, filename )
-  if tmd is None:
-    return ( False, SquadiDetailsUser() )
-  return ( True, SquadiDetailsUser( data=[ from_dict( DivisionDataUser, d ) for d in tmd ] ) )
-
-
 def loadLadder( baseFolder, filename ) -> list[ Ladder ]:
   ladderData = loadJson( baseFolder, filename )
-  return [ from_dict( Ladder, d ) for d in ladderData ] if ladderData else []
+  return [ shared.from_dict( Ladder, d ) for d in ladderData ] if ladderData else []
 
 
 def loadSquadiDetails( baseFolder, fixedName, userName ) -> SquadiDetails:
-  fixedF, fixedD = loadDivisionDataFixed( baseFolder, fixedName )
-  userF, userD = loadDivisionDataUser( baseFolder, userName )
+  fixedF, fixedD = fixed.loadDivisionDataFixed( baseFolder, fixedName )
+  userF, userD = user.loadDivisionDataUser( baseFolder, userName )
   return SquadiDetails( fixedD, userD, fixedF, userF )
 
 
 def getDivByName(
-    divisions: list[ DivisionDataFixed ] | list[ DivisionDataUser ], match
-) -> DivisionDataFixed | DivisionDataUser | None:
+    divisions: list[ fixed.DivisionDataFixed ] | list[ user.DivisionDataUser ], match
+) -> fixed.DivisionDataFixed | user.DivisionDataUser | None:
   if len( divisions ) == 0:
     return None
   return next( ( d for d in divisions if d.div.name == match ), None )
@@ -132,84 +122,9 @@ def maskedSum( arrayOfArrays ) -> ndarray:
 
 
 @dataclass
-class Division:
-  name: str
-  divisionId: int
-  teamId: int
-
-
-@dataclass
-class PlayerFixed:
-  shirt: int
-  name: str
-  goals: int
-  yellows: int
-  reds: int
-
-
-@dataclass
-class PlayerUser:
-  name: str
-  started: bool
-  position: str
-
-
-@dataclass
-class Official:
-  name: str
-  role: str
-
-
-@dataclass
-class FixtureFixed:
-  id: int
-  date: str
-  players: list[ PlayerFixed ] = field( default_factory=list )
-  officials: list[ Official ] = field( default_factory=list )
-
-
-@dataclass
-class FixtureWrapperFixed:
-  match: FixtureFixed
-
-
-@dataclass
-class FixtureWrapperUser:
-  match: FixtureUser
-
-
-@dataclass
-class FixtureUser:
-  id: int
-  players: list[ PlayerUser ] = field( default_factory=list )
-
-
-@dataclass
-class DivisionDataFixed:
-  div: Division
-  matches: list[ FixtureWrapperFixed ] = field( default_factory=list )
-
-
-@dataclass
-class DivisionDataUser:
-  div: Division
-  matches: list[ FixtureWrapperUser ] = field( default_factory=list )
-
-
-@dataclass
-class SquadiDetailsFixed:
-  data: list[ DivisionDataFixed ] = field( default_factory=list )
-
-
-@dataclass
-class SquadiDetailsUser:
-  data: list[ DivisionDataUser ] = field( default_factory=list )
-
-
-@dataclass
 class SquadiDetails:
-  fixed: SquadiDetailsFixed = field( default_factory=SquadiDetailsFixed )
-  user: SquadiDetailsUser = field( default_factory=SquadiDetailsUser )
+  fixed: fixed.SquadiDetailsFixed = field( default_factory=fixed.SquadiDetailsFixed )
+  user: user.SquadiDetailsUser = field( default_factory=user.SquadiDetailsUser )
   fixedFound: bool = False
   userFound: bool = False
 
@@ -219,8 +134,8 @@ class SquadiDetails:
     slicedU = [ div for div in self.user.data if div.div.name in divisions ] if self.userFound else []
 
     return SquadiDetails(
-        fixed=SquadiDetailsFixed( data=slicedF ),
-        user=SquadiDetailsUser( data=slicedU ),
+        fixed=fixed.SquadiDetailsFixed( data=slicedF ),
+        user=user.SquadiDetailsUser( data=slicedU ),
         fixedFound=self.fixedFound,
         userFound=self.userFound
     )
@@ -450,7 +365,7 @@ class LadderEntry:
 
 @dataclass
 class Ladder:
-  div: Division
+  div: shared.Division
   table: list[ LadderEntry ] = field( default_factory=list )
 
 
@@ -480,7 +395,7 @@ class FixtureRound:
 
 @dataclass
 class HighLevelDivisionFixture:
-  div: Division
+  div: shared.Division
   match: HighLevelFixture
 
 
@@ -492,7 +407,7 @@ class HighLevelRoundFixtures:
 
 @dataclass
 class DivisionResults:
-  div: Division
+  div: shared.Division
   rounds: list[ HighLevelRoundFixtures ] = field( default_factory=list )
 
 
@@ -509,7 +424,7 @@ class Organisation:
 @dataclass
 class ConfigEntry:
   organisation: Organisation
-  divisions: list[ Division ] = field( default_factory=list )
+  divisions: list[ shared.Division ] = field( default_factory=list )
 
 
 def playerPlayedInDivision( stats: Player, div ):
@@ -519,58 +434,3 @@ def playerPlayedInDivision( stats: Player, div ):
 def getPlayersForDiv( player_stats: PlayerStats, div: str ) -> list[ tuple[ str, Player ] ]:
   divPlayers = { name: player for name, player in player_stats.stats.items() if playerPlayedInDivision( player, div ) }
   return sorted( divPlayers.items(), key=lambda item: ( -np.nansum( item[ 1 ].stats[ div ].block.appearances ), item[ 0 ] ) )
-
-
-def resolve_type( typ ):
-  if isinstance( typ, str ):
-    return eval( typ, sys.modules[ __name__ ].__dict__ )
-  if isinstance( typ, ForwardRef ):
-    return eval( typ.__forward_arg__, sys.modules[ __name__ ].__dict__ )
-  return typ
-
-
-def from_dict( cls, data ):
-  if not isinstance( data, dict ):
-    return data
-
-  kwargs = {}
-  for field_name, field_def in cls.__dataclass_fields__.items():
-    raw_typ = field_def.type
-    typ = resolve_type( raw_typ )
-
-    # Field missing in JSON
-    if field_name not in data:
-      if field_def.default is not MISSING:
-        kwargs[ field_name ] = field_def.default
-      elif field_def.default_factory is not MISSING:
-        kwargs[ field_name ] = field_def.default_factory()
-      else:
-        kwargs[ field_name ] = None
-      continue
-
-    value = data[ field_name ]
-
-    # Optional[T]
-    if get_origin( typ ) is Optional:
-      inner = get_args( typ )[ 0 ]
-      kwargs[ field_name ] = None if value is None else from_dict( inner, value )
-      continue
-
-    # Nested dataclass
-    if hasattr( typ, "__dataclass_fields__" ):
-      kwargs[ field_name ] = from_dict( typ, value )
-
-    # List[T]
-    elif getattr( typ, "__origin__", None ) is list:
-      inner = typ.__args__[ 0 ]
-      kwargs[ field_name ] = [ from_dict( inner, item ) for item in value ]
-
-    # Dict[str, T]
-    elif getattr( typ, "__origin__", None ) is dict:
-      inner = typ.__args__[ 1 ]
-      kwargs[ field_name ] = { k: from_dict( inner, v ) for k, v in value.items() }
-
-    else:
-      kwargs[ field_name ] = value
-
-  return cls( **kwargs )

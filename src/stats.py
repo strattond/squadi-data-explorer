@@ -2,20 +2,14 @@ import re
 
 import numpy as np
 
+import fixed
+import user
 from data import (
-    DivisionDataFixed,
-    DivisionDataUser,
-    FixtureWrapperFixed,
-    FixtureWrapperUser,
     InfoStats,
     Ladder,
     Player,
-    PlayerFixed,
     PlayerStats,
-    PlayerUser,
     SquadiDetails,
-    SquadiDetailsFixed,
-    SquadiDetailsUser,
     TeamStats,
     getDivByName,
 )
@@ -56,7 +50,7 @@ def naturalNameKey( playerName ):
     return ''
 
 
-def uniquePlayers( data: SquadiDetailsFixed ) -> list[ PlayerFixed ]:
+def uniquePlayers( data: fixed.SquadiDetailsFixed ) -> list[ fixed.PlayerFixed ]:
   unique_players = set()
 
   for division in data.data:
@@ -67,7 +61,7 @@ def uniquePlayers( data: SquadiDetailsFixed ) -> list[ PlayerFixed ]:
   return sorted( unique_players )
 
 
-def sortedDivisions( data: SquadiDetailsFixed ) -> list[ str ]:
+def sortedDivisions( data: fixed.SquadiDetailsFixed ) -> list[ str ]:
   all_divisions = set()
 
   for division in data.data:
@@ -76,17 +70,17 @@ def sortedDivisions( data: SquadiDetailsFixed ) -> list[ str ]:
   return sorted( all_divisions, key=mixedDivKey )
 
 
-def maxMatches( data: SquadiDetailsFixed | SquadiDetailsUser ):
+def maxMatches( data: fixed.SquadiDetailsFixed | user.SquadiDetailsUser ):
   return max( len( d.matches ) for d in data.data )
 
 
-def getMatchingUserMatch( userDivData: DivisionDataFixed | DivisionDataUser | None, match ):
+def getMatchingUserMatch( userDivData: fixed.DivisionDataFixed | user.DivisionDataUser | None, match ):
   if userDivData is None:
     return None
   return next( ( uMatch for uMatch in userDivData.matches if uMatch.match.id == match ), None )
 
 
-def getMatchingPlayer( name, userMatchNum: FixtureWrapperFixed | FixtureWrapperUser | None ):
+def getMatchingPlayer( name, userMatchNum: fixed.FixtureWrapperFixed | user.FixtureWrapperUser | None ):
   if userMatchNum is None:
     return None
   return next( ( userPlayer for userPlayer in userMatchNum.match.players if userPlayer.name == name ), None )
@@ -115,7 +109,7 @@ def accumulatePlayersStats( data: SquadiDetails ) -> PlayerStats:
         divStats.block.yellows[ matchNum ] = player.yellows
         divStats.block.reds[ matchNum ] = player.reds
         userPlayer = getMatchingPlayer( name, userMatchNum )
-        if userPlayer is not None and isinstance( userPlayer, PlayerUser ):
+        if userPlayer is not None and isinstance( userPlayer, user.PlayerUser ):
           # player.get( "started", 0 )
           didStart = userPlayer.started
           divStats.block.starts[ matchNum ] = 0 if not didStart else 1
@@ -200,7 +194,7 @@ def getTotalsForTeams( ladders: list[ Ladder ], teamIDs: list[ int ] ) -> TeamSt
 
 
 def getInfographicData(
-    player_stats: PlayerStats, divisionData: SquadiDetailsFixed, ladders: list[ Ladder ]
+    player_stats: PlayerStats, divisionData: fixed.SquadiDetailsFixed, ladders: list[ Ladder ]
 ) -> InfoStats | None:
 
   cumRounds = maxMatches( divisionData )

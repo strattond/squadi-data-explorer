@@ -6,6 +6,9 @@ from pathlib import Path
 import numpy as np
 
 import data
+import fixed
+import shared
+import user
 from charting import drawColourChart, plotRowData, plotStatsData
 from stats import (
     accumulatePlayersStats,
@@ -36,9 +39,9 @@ def totalBorrowings( stats: data.Player ):
 
 
 def calcAppearanceScore(
-    player: data.PlayerFixed | data.PlayerUser | None, userPlayer: data.PlayerFixed | data.PlayerUser | None
+    player: fixed.PlayerFixed | user.PlayerUser | None, userPlayer: fixed.PlayerFixed | user.PlayerUser | None
 ) -> int:
-  if player is None or not isinstance( player, data.PlayerFixed ):
+  if player is None or not isinstance( player, fixed.PlayerFixed ):
     # Can't score goals, can't get carded, can't start or appear
     return 0
   rVal: int = 1
@@ -56,7 +59,7 @@ def calcAppearanceScore(
     else:
       rVal |= 4
 
-  if userPlayer is not None and isinstance( userPlayer, data.PlayerUser ) and userPlayer.started:
+  if userPlayer is not None and isinstance( userPlayer, user.PlayerUser ) and userPlayer.started:
     rVal |= 2
 
   if player.goals > 0:
@@ -81,8 +84,8 @@ def calculateBorrowings( statsOfInterest: data.PlayerStats, minDivisions=2 ):
 
 
 def calcAppearanceMatrix(
-    sortedDivPlayers: list[ tuple[ str, data.Player ] ], divDetail: data.DivisionDataFixed | data.DivisionDataUser,
-    userDivDetail: data.DivisionDataFixed | data.DivisionDataUser | None
+    sortedDivPlayers: list[ tuple[ str, data.Player ] ], divDetail: fixed.DivisionDataFixed | user.DivisionDataUser,
+    userDivDetail: fixed.DivisionDataFixed | user.DivisionDataUser | None
 ):
   playerMatrix = np.zeros( ( len( sortedDivPlayers ), numRounds ), dtype=np.uint32 )
   for i, p in enumerate( sortedDivPlayers ):
@@ -116,7 +119,7 @@ configData = data.loadJson( 'data', 'config.json' )
 if configData is None:
   print( "Please provide a valid configuration file" )
   sys.exit( 1 )
-config = [ data.from_dict( data.ConfigEntry, d ) for d in configData ] if configData else []
+config = [ shared.from_dict( data.ConfigEntry, d ) for d in configData ] if configData else []
 
 print( f"Starting our squadi stats processing for year {args.year}" )
 
@@ -129,7 +132,7 @@ outputBase, plotBase = data.getPaths( configMatch )
 prevYearConfig = data.getMatchingConfig( args.year - 1, config )
 if prevYearConfig is None:
   print( "Skipping Year on Year, no data" )
-  unfilteredSquadiData = data.SquadiDetails( data.SquadiDetailsFixed(), data.SquadiDetailsUser() )
+  unfilteredSquadiData = data.SquadiDetails( fixed.SquadiDetailsFixed(), user.SquadiDetailsUser() )
 else:
   print( "Loading prev year data" )
   prevOutputBase, prevPlotBase = data.getPaths( prevYearConfig )

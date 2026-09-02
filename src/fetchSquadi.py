@@ -9,6 +9,8 @@ from playwright.sync_api import Browser, Page, Response, sync_playwright
 from tqdm import tqdm
 
 import data
+import fixed
+import shared
 
 parser = argparse.ArgumentParser(
     prog="Squadi Parser", description="Parses data from squadi into JSON format for further processing"
@@ -30,7 +32,7 @@ print( "Loading configuration" )
 config: list[ data.ConfigEntry ] = []
 with open( "data/config.json", "r" ) as f:
   configData = json.load( f )
-  config = [ data.from_dict( data.ConfigEntry, d ) for d in configData ] if configData else []
+  config = [ shared.from_dict( data.ConfigEntry, d ) for d in configData ] if configData else []
 
 print( f"Starting our squadi fetch for year {args.year}" )
 
@@ -60,7 +62,7 @@ def matchRoot():
 
 ladders: list[ data.Ladder ] = []
 results: list[ data.DivisionResults ] = []
-teamMatchDetails = data.SquadiDetailsFixed()
+teamMatchDetails = fixed.SquadiDetailsFixed()
 divMatchDetails = []
 loadedMatchDetails = False
 loadedDivMatchDetails = False
@@ -80,7 +82,7 @@ def calculateWinLoss( json, teamId ):
   return '-----'
 
 
-def processLadderData( div: data.Division, json ):
+def processLadderData( div: shared.Division, json ):
 
   table: list[ data.LadderEntry ] = []
   for team in json[ 'ladders' ]:
@@ -136,7 +138,7 @@ def createMatch( match, startTime ) -> data.HighLevelFixture:
   )
 
 
-def processResultsData( div: data.Division, json ):
+def processResultsData( div: shared.Division, json ):
 
   rounds = []
   for round in json[ 'rounds' ]:
@@ -206,7 +208,7 @@ def processFullResultsData( json, existing ):
           print( f"   .. Adding {fetchedMatch['id']}" )
 
 
-def fetchDivisionLadderAndResults( div: data.Division, page: Page ):
+def fetchDivisionLadderAndResults( div: shared.Division, page: Page ):
   # Capture the API response you care about
   ladderURL = f"{ladderRoot()}&divisionId={div.divisionId}"
 
@@ -229,15 +231,15 @@ def fetchDivisionLadderAndResults( div: data.Division, page: Page ):
   page.wait_for_load_state( "networkidle" )
 
 
-def pushBlankDiv( div: data.Division ) -> list[ data.FixtureWrapperFixed ]:
+def pushBlankDiv( div: shared.Division ) -> list[ fixed.FixtureWrapperFixed ]:
   global anyFetched
-  added = data.DivisionDataFixed( div=div )
+  added = fixed.DivisionDataFixed( div=div )
   teamMatchDetails.data.append( added )
   anyFetched = True
   return added.matches
 
 
-def pushBlankFullDiv( div: data.Division ):
+def pushBlankFullDiv( div: shared.Division ):
   global anyFetched
   added = { "div": div, "rounds": []}
   divMatchDetails.append( added )
@@ -245,7 +247,7 @@ def pushBlankFullDiv( div: data.Division ):
   return added[ 'rounds' ]
 
 
-def loadFullExistingDetails( div: data.Division ):
+def loadFullExistingDetails( div: shared.Division ):
   global divMatchDetails, loadedDivMatchDetails
   p = Path( f"{outputBase}/divMatchDetails.json" )
   if not p.exists():
@@ -263,7 +265,7 @@ def loadFullExistingDetails( div: data.Division ):
   return pushBlankFullDiv( div )
 
 
-def loadExistingDetails( div: data.Division ) -> list[ data.FixtureWrapperFixed ]:
+def loadExistingDetails( div: shared.Division ) -> list[ fixed.FixtureWrapperFixed ]:
   global loadedMatchDetails, teamMatchDetails
   p = Path( f"{outputBase}/matchDetails.json" )
   if not p.exists():
@@ -273,7 +275,7 @@ def loadExistingDetails( div: data.Division ) -> list[ data.FixtureWrapperFixed 
     with open( f"{outputBase}/matchDetails.json", 'r' ) as f:
       tmd = json.load( f )
     loadedMatchDetails = True
-    teamMatchDetails = data.SquadiDetailsFixed( data=[ data.from_dict( data.DivisionDataFixed, d ) for d in tmd ] )
+    teamMatchDetails = fixed.SquadiDetailsFixed( data=[ shared.from_dict( fixed.DivisionDataFixed, d ) for d in tmd ] )
 
   for i in teamMatchDetails.data:
     if i.div.divisionId == div.divisionId:
@@ -283,7 +285,7 @@ def loadExistingDetails( div: data.Division ) -> list[ data.FixtureWrapperFixed 
   return pushBlankDiv( div )
 
 
-def getDivResults( div: data.Division ) -> data.DivisionResults | None:
+def getDivResults( div: shared.Division ) -> data.DivisionResults | None:
   return next( ( i for i in results if i.div.divisionId == div.divisionId ), None )
 
 
@@ -304,16 +306,16 @@ def calculateCards( cards ):
   return ( yellows, reds )
 
 
-def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ data.FixtureWrapperFixed ], json, startTime ):
+def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ fixed.FixtureWrapperFixed ], json, startTime ):
   global anyFetched
-  toAdd = data.FixtureWrapperFixed(
-      match=data.FixtureFixed( id=matchId, date=noDelimTime( localTime( parseDateTime( startTime ) ) ) )
+  toAdd = fixed.FixtureWrapperFixed(
+      match=fixed.FixtureFixed( id=matchId, date=noDelimTime( localTime( parseDateTime( startTime ) ) ) )
   )
   for player in json[ 'playing' ]:
     if player[ 'teamId' ] == teamOfInterest:
       # Got a player to add!
       yellows, reds = calculateCards( player[ 'cards' ] )
-      newPlayer = data.PlayerFixed(
+      newPlayer = fixed.PlayerFixed(
           shirt=int( player[ 'shirt' ] ),
           name=player[ 'firstName' ] + " " + player[ 'lastName' ],
           goals=player[ 'goals' ][ 0 ][ 'count' ] if len( player[ 'goals' ] ) > 0 else 0,
@@ -323,14 +325,14 @@ def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ data.Fi
       toAdd.match.players.append( newPlayer )
   for official in json[ 'teamOfficials' ]:
     if official[ 'teamId' ] == teamOfInterest:
-      newOfficial = data.Official( role=official[ 'role' ], name=official[ 'firstName' ] + " " + official[ 'lastName' ] )
+      newOfficial = shared.Official( role=official[ 'role' ], name=official[ 'firstName' ] + " " + official[ 'lastName' ] )
       toAdd.match.officials.append( newOfficial )
 
   existing.append( toAdd )
   anyFetched = True
 
 
-def fetchMatchDetails( matchId, teamOfInterest, existing: list[ data.FixtureWrapperFixed ], browser: Browser, startTime ):
+def fetchMatchDetails( matchId, teamOfInterest, existing: list[ fixed.FixtureWrapperFixed ], browser: Browser, startTime ):
   with browser.new_page() as page:
     matchURL = f"{matchRoot()}&matchId={matchId}"
 
@@ -351,7 +353,7 @@ def fetchMatchDetails( matchId, teamOfInterest, existing: list[ data.FixtureWrap
     page.wait_for_load_state( "networkidle" )
 
 
-def fetchNewDetails( div: data.Division, browser: Browser, existing: list[ data.FixtureWrapperFixed ] ):
+def fetchNewDetails( div: shared.Division, browser: Browser, existing: list[ fixed.FixtureWrapperFixed ] ):
   global anyFetched
   # So, we only care about results, and results -we don't already have-
   divResults = getDivResults( div )
@@ -386,7 +388,7 @@ def fetchNewDetails( div: data.Division, browser: Browser, existing: list[ data.
       fetchMatchDetails( matchId, teamOfInterest, existing, browser, m.startTime )
 
 
-def fetchDivNewDetails( div: data.Division, browser: Browser, existing ):
+def fetchDivNewDetails( div: shared.Division, browser: Browser, existing ):
   # So, we only care about results, and results -we don't already have-
   resultsURL = f"{teamFixtureRoot()}&divisionId={div.divisionId}"
 
@@ -413,13 +415,13 @@ def fetchDivNewDetails( div: data.Division, browser: Browser, existing ):
 if args.match:
   print( "Loading existing data" )
   laddersData = data.loadJson( outputBase, 'ladder.json' )
-  ladders = [ data.from_dict( data.Ladder, d ) for d in laddersData ] if laddersData else []
+  ladders = [ shared.from_dict( data.Ladder, d ) for d in laddersData ] if laddersData else []
   resultsData = data.loadJson( outputBase, 'results.json' ) or []
-  results = [ data.from_dict( data.DivisionResults, d ) for d in resultsData ] if resultsData else []
+  results = [ shared.from_dict( data.DivisionResults, d ) for d in resultsData ] if resultsData else []
   nextsData = data.loadJson( outputBase, 'next.json' )
-  nexts = [ data.from_dict( data.HighLevelDivisionFixture, d ) for d in nextsData ] if nextsData else []
+  nexts = [ shared.from_dict( data.HighLevelDivisionFixture, d ) for d in nextsData ] if nextsData else []
   recentsData = data.loadJson( outputBase, 'recent.json' ) or []
-  recents = [ data.from_dict( data.HighLevelDivisionFixture, d ) for d in recentsData ] if recentsData else []
+  recents = [ shared.from_dict( data.HighLevelDivisionFixture, d ) for d in recentsData ] if recentsData else []
 
 with sync_playwright() as p:
   browser = p.chromium.launch( headless=True )
