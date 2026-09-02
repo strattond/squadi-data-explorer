@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -5,7 +7,7 @@ import sys
 from dataclasses import MISSING, asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ForwardRef, Optional, get_args, get_origin
 
 import numpy as np
 from numpy import ndarray
@@ -13,20 +15,18 @@ from numpy import ndarray
 pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
 
 
-def getMatchingConfig( yearOfInterest, config ) -> Any:
-  configMatch = None
-  for comp in config:
-    if comp[ 'organisation' ][ 'yearId' ] == yearOfInterest:
-      return comp
+def getMatchingConfig( yearOfInterest: int, config: list[ ConfigEntry ] ) -> ConfigEntry:
+  toReturn = next( ( i for i in config if i.organisation.yearId == yearOfInterest ), None )
+  if toReturn is not None:
+    return toReturn
 
-  if configMatch is None:
-    print( "Please provide a valid configuration year" )
-    sys.exit( 1 )
+  print( "Please provide a valid configuration year" )
+  sys.exit( 1 )
 
 
-def getPaths( configMatch ):
-  outputBase = f"output/{configMatch['organisation']['yearId']}"
-  plotBase = f"plots/{configMatch['organisation']['yearId']}"
+def getPaths( configMatch: ConfigEntry ):
+  outputBase = f"output/{configMatch.organisation.yearId}"
+  plotBase = f"plots/{configMatch.organisation.yearId}"
 
   return ( outputBase, plotBase )
 
@@ -102,6 +102,9 @@ def maskedSum( arrayOfArrays ) -> ndarray:
   mask_all_nan = np.all( [ np.isnan( a ) for a in arrayOfArrays ], axis=0 )
   summed[ mask_all_nan ] = np.nan
   return summed
+
+
+### Competition classes
 
 
 @dataclass
@@ -369,6 +372,89 @@ class InfoStats:
     return rVal
 
 
+### Ladder stuff
+
+
+@dataclass
+class LadderEntry:
+  teamId: int
+  Rank: int
+  Team: str
+  GamesPlayed: int
+  GamesWon: int
+  GamesDrawn: int
+  GamesLost: int
+  GoalsFor: int
+  GoalsAgainst: int
+  Points: int
+  GoalsDiff: int
+  WinLoss: str
+
+
+@dataclass
+class Ladder:
+  div: Division
+  table: list[ LadderEntry ] = field( default_factory=list )
+
+
+### Results stuff
+
+
+@dataclass
+class HighLevelFixture:
+  id: int
+  startTime: str
+  when: str
+  homeId: int
+  home: str
+  goalsHome: int
+  awayId: int
+  away: str
+  goalsAway: int
+  ground: str
+
+
+@dataclass
+class FixtureRound:
+  name: str
+  id: int
+  sequence: int
+
+
+@dataclass
+class HighLevelDivisionFixture:
+  div: Division
+  match: HighLevelFixture
+
+
+@dataclass
+class HighLevelRoundFixtures:
+  round: FixtureRound
+  matches: list[ HighLevelFixture ] = field( default_factory=list )
+
+
+@dataclass
+class DivisionResults:
+  div: Division
+  rounds: list[ HighLevelRoundFixtures ] = field( default_factory=list )
+
+
+### Config stuff
+
+
+@dataclass
+class Organisation:
+  yearId: int
+  organisationKey: str
+  competitionUniqueKey: str
+
+
+@dataclass
+class ConfigEntry:
+  organisation: Organisation
+  divisions: list[ Division ] = field( default_factory=list )
+
+
 def playerPlayedInDivision( stats: Player, div ):
   return div in stats.stats and np.any( ~np.isnan( stats.stats[ div ].block.appearances ) )
 
@@ -378,13 +464,22 @@ def getPlayersForDiv( player_stats: PlayerStats, div: str ) -> list[ tuple[ str,
   return sorted( divPlayers.items(), key=lambda item: ( -np.nansum( item[ 1 ].stats[ div ].block.appearances ), item[ 0 ] ) )
 
 
+def resolve_type( typ ):
+  if isinstance( typ, str ):
+    return eval( typ, sys.modules[ __name__ ].__dict__ )
+  if isinstance( typ, ForwardRef ):
+    return eval( typ.__forward_arg__, sys.modules[ __name__ ].__dict__ )
+  return typ
+
+
 def from_dict( cls, data ):
   if not isinstance( data, dict ):
     return data
 
   kwargs = {}
   for field_name, field_def in cls.__dataclass_fields__.items():
-    typ = field_def.type
+    raw_typ = field_def.type
+    typ = resolve_type( raw_typ )
 
     # Field missing in JSON
     if field_name not in data:
@@ -397,6 +492,12 @@ def from_dict( cls, data ):
       continue
 
     value = data[ field_name ]
+
+    # Optional[T]
+    if get_origin( typ ) is Optional:
+      inner = get_args( typ )[ 0 ]
+      kwargs[ field_name ] = None if value is None else from_dict( inner, value )
+      continue
 
     # Nested dataclass
     if hasattr( typ, "__dataclass_fields__" ):

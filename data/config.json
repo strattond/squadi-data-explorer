@@ -8,12 +8,12 @@
     "divisions": [
       {
         "name": "Metro 6 South",
-        "divisionId": "770",
+        "divisionId": 770,
         "teamId": 6245
       },
       {
         "name": "Metro 7 Central",
-        "divisionId": "816",
+        "divisionId": 816,
         "teamId": 6246
       }
     ]
@@ -27,12 +27,12 @@
     "divisions": [
       {
         "name": "Metro 5 Central",
-        "divisionId": "2735",
+        "divisionId": 2735,
         "teamId": 24850
       },
       {
         "name": "Metro 7 Central",
-        "divisionId": "2737",
+        "divisionId": 2737,
         "teamId": 24847
       }
     ]
@@ -46,27 +46,27 @@
     "divisions": [
       {
         "name": "Metro 5 South",
-        "divisionId": "5852",
+        "divisionId": 5852,
         "teamId": 59199
       },
       {
         "name": "Metro 6 Central",
-        "divisionId": "5858",
+        "divisionId": 5858,
         "teamId": 59451
       },
       {
         "name": "Metro 7 Central",
-        "divisionId": "5854",
+        "divisionId": 5854,
         "teamId": 59200
       },
       {
         "name": "Metro 9 South",
-        "divisionId": "5870",
+        "divisionId": 5870,
         "teamId": 59452
       },
       {
         "name": "Metro 10 South",
-        "divisionId": "5851",
+        "divisionId": 5851,
         "teamId": 59453
       }
     ]
@@ -80,22 +80,22 @@
     "divisions": [
       {
         "name": "Metro 5 South",
-        "divisionId": "9177",
+        "divisionId": 9177,
         "teamId": 95328
       },
       {
         "name": "Metro 6 Central",
-        "divisionId": "9180",
+        "divisionId": 9180,
         "teamId": 95357
       },
       {
         "name": "Metro 7 Central",
-        "divisionId": "9183",
+        "divisionId": 9183,
         "teamId": 95385
       },
       {
         "name": "Metro 10 South",
-        "divisionId": "9189",
+        "divisionId": 9189,
         "teamId": 95437
       }
     ]
