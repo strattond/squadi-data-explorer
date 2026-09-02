@@ -96,14 +96,14 @@ def loadLadder( baseFolder, filename ) -> list[ Ladder ]:
 
 
 def loadSquadiDetails( baseFolder, fixedName, userName ) -> SquadiDetails:
-  fixedF, fixedD = fixed.loadDivisionDataFixed( baseFolder, fixedName )
-  userF, userD = user.loadDivisionDataUser( baseFolder, userName )
+  fixedF, fixedD = fixed.loadDivisionData( baseFolder, fixedName )
+  userF, userD = user.loadDivisionData( baseFolder, userName )
   return SquadiDetails( fixedD, userD, fixedF, userF )
 
 
 def getDivByName(
-    divisions: list[ fixed.DivisionDataFixed ] | list[ user.DivisionDataUser ], match
-) -> fixed.DivisionDataFixed | user.DivisionDataUser | None:
+    divisions: list[ fixed.DivisionData ] | list[ user.DivisionData ], match
+) -> fixed.DivisionData | user.DivisionData | None:
   if len( divisions ) == 0:
     return None
   return next( ( d for d in divisions if d.div.name == match ), None )
@@ -123,8 +123,8 @@ def maskedSum( arrayOfArrays ) -> ndarray:
 
 @dataclass
 class SquadiDetails:
-  fixed: fixed.SquadiDetailsFixed = field( default_factory=fixed.SquadiDetailsFixed )
-  user: user.SquadiDetailsUser = field( default_factory=user.SquadiDetailsUser )
+  fixed: fixed.SquadiDetails = field( default_factory=fixed.SquadiDetails )
+  user: user.SquadiDetails = field( default_factory=user.SquadiDetails )
   fixedFound: bool = False
   userFound: bool = False
 
@@ -134,8 +134,8 @@ class SquadiDetails:
     slicedU = [ div for div in self.user.data if div.div.name in divisions ] if self.userFound else []
 
     return SquadiDetails(
-        fixed=fixed.SquadiDetailsFixed( data=slicedF ),
-        user=user.SquadiDetailsUser( data=slicedU ),
+        fixed=fixed.SquadiDetails( data=slicedF ),
+        user=user.SquadiDetails( data=slicedU ),
         fixedFound=self.fixedFound,
         userFound=self.userFound
     )

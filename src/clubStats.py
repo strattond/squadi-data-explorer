@@ -39,9 +39,9 @@ def totalBorrowings( stats: data.Player ):
 
 
 def calcAppearanceScore(
-    player: fixed.PlayerFixed | user.PlayerUser | None, userPlayer: fixed.PlayerFixed | user.PlayerUser | None
+    player: fixed.Player | user.Player | None, userPlayer: fixed.Player | user.Player | None
 ) -> int:
-  if player is None or not isinstance( player, fixed.PlayerFixed ):
+  if player is None or not isinstance( player, fixed.Player ):
     # Can't score goals, can't get carded, can't start or appear
     return 0
   rVal: int = 1
@@ -59,7 +59,7 @@ def calcAppearanceScore(
     else:
       rVal |= 4
 
-  if userPlayer is not None and isinstance( userPlayer, user.PlayerUser ) and userPlayer.started:
+  if userPlayer is not None and isinstance( userPlayer, user.Player ) and userPlayer.started:
     rVal |= 2
 
   if player.goals > 0:
@@ -84,8 +84,8 @@ def calculateBorrowings( statsOfInterest: data.PlayerStats, minDivisions=2 ):
 
 
 def calcAppearanceMatrix(
-    sortedDivPlayers: list[ tuple[ str, data.Player ] ], divDetail: fixed.DivisionDataFixed | user.DivisionDataUser,
-    userDivDetail: fixed.DivisionDataFixed | user.DivisionDataUser | None
+    sortedDivPlayers: list[ tuple[ str, data.Player ] ], divDetail: fixed.DivisionData | user.DivisionData,
+    userDivDetail: fixed.DivisionData | user.DivisionData | None
 ):
   playerMatrix = np.zeros( ( len( sortedDivPlayers ), numRounds ), dtype=np.uint32 )
   for i, p in enumerate( sortedDivPlayers ):
@@ -132,7 +132,7 @@ outputBase, plotBase = data.getPaths( configMatch )
 prevYearConfig = data.getMatchingConfig( args.year - 1, config )
 if prevYearConfig is None:
   print( "Skipping Year on Year, no data" )
-  unfilteredSquadiData = data.SquadiDetails( fixed.SquadiDetailsFixed(), user.SquadiDetailsUser() )
+  unfilteredSquadiData = data.SquadiDetails( fixed.SquadiDetails(), user.SquadiDetails() )
 else:
   print( "Loading prev year data" )
   prevOutputBase, prevPlotBase = data.getPaths( prevYearConfig )

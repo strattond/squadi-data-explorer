@@ -7,36 +7,36 @@ import shared
 
 
 @dataclass
-class PlayerUser:
+class Player:
   name: str
   started: bool
   position: str
 
 
 @dataclass
-class FixtureWrapperUser:
-  match: FixtureUser
+class FixtureWrapper:
+  match: Fixture
 
 
 @dataclass
-class FixtureUser:
+class Fixture:
   id: int
-  players: list[ PlayerUser ] = field( default_factory=list )
+  players: list[ Player ] = field( default_factory=list )
 
 
 @dataclass
-class DivisionDataUser:
+class DivisionData:
   div: shared.Division
-  matches: list[ FixtureWrapperUser ] = field( default_factory=list )
+  matches: list[ FixtureWrapper ] = field( default_factory=list )
 
 
 @dataclass
-class SquadiDetailsUser:
-  data: list[ DivisionDataUser ] = field( default_factory=list )
+class SquadiDetails:
+  data: list[ DivisionData ] = field( default_factory=list )
 
 
-def loadDivisionDataUser( baseFolder, filename ) -> tuple[ bool, SquadiDetailsUser ]:
+def loadDivisionData( baseFolder, filename ) -> tuple[ bool, SquadiDetails ]:
   tmd = data.loadJson( baseFolder, filename )
   if tmd is None:
-    return ( False, SquadiDetailsUser() )
-  return ( True, SquadiDetailsUser( data=[ shared.from_dict( DivisionDataUser, d ) for d in tmd ] ) )
+    return ( False, SquadiDetails() )
+  return ( True, SquadiDetails( data=[ shared.from_dict( DivisionData, d ) for d in tmd ] ) )

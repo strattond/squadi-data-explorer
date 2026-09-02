@@ -62,7 +62,7 @@ def matchRoot():
 
 ladders: list[ data.Ladder ] = []
 results: list[ data.DivisionResults ] = []
-teamMatchDetails = fixed.SquadiDetailsFixed()
+teamMatchDetails = fixed.SquadiDetails()
 divMatchDetails = []
 loadedMatchDetails = False
 loadedDivMatchDetails = False
@@ -231,9 +231,9 @@ def fetchDivisionLadderAndResults( div: shared.Division, page: Page ):
   page.wait_for_load_state( "networkidle" )
 
 
-def pushBlankDiv( div: shared.Division ) -> list[ fixed.FixtureWrapperFixed ]:
+def pushBlankDiv( div: shared.Division ) -> list[ fixed.FixtureWrapper ]:
   global anyFetched
-  added = fixed.DivisionDataFixed( div=div )
+  added = fixed.DivisionData( div=div )
   teamMatchDetails.data.append( added )
   anyFetched = True
   return added.matches
@@ -265,7 +265,7 @@ def loadFullExistingDetails( div: shared.Division ):
   return pushBlankFullDiv( div )
 
 
-def loadExistingDetails( div: shared.Division ) -> list[ fixed.FixtureWrapperFixed ]:
+def loadExistingDetails( div: shared.Division ) -> list[ fixed.FixtureWrapper ]:
   global loadedMatchDetails, teamMatchDetails
   p = Path( f"{outputBase}/matchDetails.json" )
   if not p.exists():
@@ -275,7 +275,7 @@ def loadExistingDetails( div: shared.Division ) -> list[ fixed.FixtureWrapperFix
     with open( f"{outputBase}/matchDetails.json", 'r' ) as f:
       tmd = json.load( f )
     loadedMatchDetails = True
-    teamMatchDetails = fixed.SquadiDetailsFixed( data=[ shared.from_dict( fixed.DivisionDataFixed, d ) for d in tmd ] )
+    teamMatchDetails = fixed.SquadiDetails( data=[ shared.from_dict( fixed.DivisionData, d ) for d in tmd ] )
 
   for i in teamMatchDetails.data:
     if i.div.divisionId == div.divisionId:
@@ -306,16 +306,16 @@ def calculateCards( cards ):
   return ( yellows, reds )
 
 
-def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ fixed.FixtureWrapperFixed ], json, startTime ):
+def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ fixed.FixtureWrapper ], json, startTime ):
   global anyFetched
-  toAdd = fixed.FixtureWrapperFixed(
-      match=fixed.FixtureFixed( id=matchId, date=noDelimTime( localTime( parseDateTime( startTime ) ) ) )
+  toAdd = fixed.FixtureWrapper(
+      match=fixed.Fixture( id=matchId, date=noDelimTime( localTime( parseDateTime( startTime ) ) ) )
   )
   for player in json[ 'playing' ]:
     if player[ 'teamId' ] == teamOfInterest:
       # Got a player to add!
       yellows, reds = calculateCards( player[ 'cards' ] )
-      newPlayer = fixed.PlayerFixed(
+      newPlayer = fixed.Player(
           shirt=int( player[ 'shirt' ] ),
           name=player[ 'firstName' ] + " " + player[ 'lastName' ],
           goals=player[ 'goals' ][ 0 ][ 'count' ] if len( player[ 'goals' ] ) > 0 else 0,
@@ -332,7 +332,7 @@ def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ fixed.F
   anyFetched = True
 
 
-def fetchMatchDetails( matchId, teamOfInterest, existing: list[ fixed.FixtureWrapperFixed ], browser: Browser, startTime ):
+def fetchMatchDetails( matchId, teamOfInterest, existing: list[ fixed.FixtureWrapper ], browser: Browser, startTime ):
   with browser.new_page() as page:
     matchURL = f"{matchRoot()}&matchId={matchId}"
 
@@ -353,7 +353,7 @@ def fetchMatchDetails( matchId, teamOfInterest, existing: list[ fixed.FixtureWra
     page.wait_for_load_state( "networkidle" )
 
 
-def fetchNewDetails( div: shared.Division, browser: Browser, existing: list[ fixed.FixtureWrapperFixed ] ):
+def fetchNewDetails( div: shared.Division, browser: Browser, existing: list[ fixed.FixtureWrapper ] ):
   global anyFetched
   # So, we only care about results, and results -we don't already have-
   divResults = getDivResults( div )

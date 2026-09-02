@@ -6,15 +6,15 @@ import data
 import shared
 
 
-def loadDivisionDataFixed( baseFolder, filename ) -> tuple[ bool, SquadiDetailsFixed ]:
+def loadDivisionData( baseFolder, filename ) -> tuple[ bool, SquadiDetails ]:
   tmd = data.loadJson( baseFolder, filename )
   if tmd is None:
-    return ( False, SquadiDetailsFixed() )
-  return ( True, SquadiDetailsFixed( data=[ shared.from_dict( DivisionDataFixed, d ) for d in tmd ] ) )
+    return ( False, SquadiDetails() )
+  return ( True, SquadiDetails( data=[ shared.from_dict( DivisionData, d ) for d in tmd ] ) )
 
 
 @dataclass
-class PlayerFixed:
+class Player:
   shirt: int
   name: str
   goals: int
@@ -23,26 +23,26 @@ class PlayerFixed:
 
 
 @dataclass
-class FixtureFixed:
+class Fixture:
   id: int
   date: str
-  players: list[ PlayerFixed ] = field( default_factory=list )
+  players: list[ Player ] = field( default_factory=list )
   officials: list[ shared.Official ] = field( default_factory=list )
 
 
 @dataclass
-class FixtureWrapperFixed:
-  match: FixtureFixed
+class FixtureWrapper:
+  match: Fixture
 
 
 @dataclass
-class DivisionDataFixed:
+class DivisionData:
   div: shared.Division
-  matches: list[ FixtureWrapperFixed ] = field( default_factory=list )
+  matches: list[ FixtureWrapper ] = field( default_factory=list )
 
 
 @dataclass
-class SquadiDetailsFixed:
-  data: list[ DivisionDataFixed ] = field( default_factory=list )
+class SquadiDetails:
+  data: list[ DivisionData ] = field( default_factory=list )
 
 
