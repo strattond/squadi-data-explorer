@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -11,28 +10,11 @@ from pathlib import Path
 import numpy as np
 from numpy import ndarray
 
-import blended
 import fixed as fx
 import shared
 import user
 
 pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
-
-
-def getMatchingConfig( yearOfInterest: int, config: list[ ConfigEntry ] ) -> ConfigEntry:
-  toReturn = next( ( i for i in config if i.organisation.yearId == yearOfInterest ), None )
-  if toReturn is not None:
-    return toReturn
-
-  print( "Please provide a valid configuration year" )
-  sys.exit( 1 )
-
-
-def getPaths( configMatch: ConfigEntry ):
-  outputBase = f"output/{configMatch.organisation.yearId}"
-  plotBase = f"plots/{configMatch.organisation.yearId}"
-
-  return ( outputBase, plotBase )
 
 
 def makeIfMissing( path ):
@@ -86,18 +68,12 @@ def loadLadder( baseFolder, filename ) -> list[ Ladder ]:
   return [ shared.from_dict( Ladder, d ) for d in ladderData ] if ladderData else []
 
 
-def loadSquadiDetails( baseFolder, fixedName, userName ) -> SquadiDetails:
+def loadSquadiDetails( baseFolder, fixedName, userName, resultsName ) -> SquadiDetails:
   fixedF, fixedD = fx.loadDivisionData( baseFolder, fixedName )
   userF, userD = user.loadDivisionData( baseFolder, userName )
-  return SquadiDetails( fixedD, userD, fixedF, userF )
-
-
-def getDivByName(
-    divisions: list[ blended.DivisionData ], match
-) -> blended.DivisionData | None:
-  if len( divisions ) == 0:
-    return None
-  return next( ( d for d in divisions if d.div.name == match ), None )
+  resultsData = shared.loadJson( baseFolder, resultsName ) or []
+  results: list[ DivisionResults ] = [ shared.from_dict( DivisionResults, d ) for d in resultsData ] if resultsData else []
+  return SquadiDetails( fixedD, userD, fixedF, userF, results )
 
 
 def maskedSum( arrayOfArrays ) -> ndarray:
@@ -118,6 +94,8 @@ class SquadiDetails:
   userD: user.SquadiDetails = field( default_factory=user.SquadiDetails )
   fixedFound: bool = False
   userFound: bool = False
+  results: list[ DivisionResults ] = field( default_factory=list )
+
 
 @dataclass
 class StatBlock:
@@ -390,19 +368,6 @@ class DivisionResults:
 
 
 ### Config stuff
-
-
-@dataclass
-class Organisation:
-  yearId: int
-  organisationKey: str
-  competitionUniqueKey: str
-
-
-@dataclass
-class ConfigEntry:
-  organisation: Organisation
-  divisions: list[ shared.Division ] = field( default_factory=list )
 
 
 def playerPlayedInDivision( stats: Player, div ):

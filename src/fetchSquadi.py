@@ -29,15 +29,12 @@ if not args.match and not args.summary:
   sys.exit( 1 )
 
 print( "Loading configuration" )
-config: list[ data.ConfigEntry ] = []
-with open( "data/config.json", "r" ) as f:
-  configData = json.load( f )
-  config = [ shared.from_dict( data.ConfigEntry, d ) for d in configData ] if configData else []
+config: list[ shared.ConfigEntry ] = shared.loadConfig()
 
 print( f"Starting our squadi fetch for year {args.year}" )
 
-configMatch = data.getMatchingConfig( args.year, config )
-outputBase, _ = data.getPaths( configMatch )
+configMatch = shared.getMatchingConfig( args.year, config )
+outputBase, _ = shared.getPaths( configMatch )
 
 data.makeIfMissing( outputBase )
 

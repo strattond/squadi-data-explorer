@@ -1,8 +1,23 @@
+from __future__ import annotations
+
 import json
 import sys
-from dataclasses import MISSING, dataclass
+from dataclasses import MISSING, dataclass, field
 from pathlib import Path
 from typing import Any, ForwardRef, Optional, get_args, get_origin
+
+
+@dataclass
+class Organisation:
+  yearId: int
+  organisationKey: str
+  competitionUniqueKey: str
+
+
+@dataclass
+class ConfigEntry:
+  organisation: Organisation
+  divisions: list[ Division ] = field( default_factory=list )
 
 
 @dataclass
@@ -73,6 +88,7 @@ def from_dict( cls, data ):
 
   return cls( **kwargs )
 
+
 def loadJson( baseFolder, filename ) -> None | Any:
   qualifile = f"{baseFolder}/{filename}"
   target = Path( qualifile )
@@ -82,3 +98,24 @@ def loadJson( baseFolder, filename ) -> None | Any:
     return json.load( f )
 
 
+def loadConfig() -> list[ ConfigEntry ]:
+  with open( "data/config.json", "r" ) as f:
+    configData = json.load( f )
+    return [ from_dict( ConfigEntry, d ) for d in configData ] if configData else []
+  return []
+
+
+def getMatchingConfig( yearOfInterest: int, config: list[ ConfigEntry ] ) -> ConfigEntry:
+  toReturn = next( ( i for i in config if i.organisation.yearId == yearOfInterest ), None )
+  if toReturn is not None:
+    return toReturn
+
+  print( "Please provide a valid configuration year" )
+  sys.exit( 1 )
+
+
+def getPaths( configMatch: ConfigEntry ):
+  outputBase = f"output/{configMatch.organisation.yearId}"
+  plotBase = f"plots/{configMatch.organisation.yearId}"
+
+  return ( outputBase, plotBase )

@@ -11,7 +11,6 @@ from data import (
     Player,
     PlayerStats,
     TeamStats,
-    getDivByName,
 )
 
 
@@ -125,7 +124,7 @@ def getTeamInfographicData(
     player_stats: list[ tuple[ str, Player ] ], data: blended.SquadiDetails, div: str, ladders: list[ Ladder ]
 ) -> InfoStats | None:
 
-  divDetail = getDivByName( data.data, div )
+  divDetail = blended.getDivByName( data.data, div )
   if divDetail is None:
     return None
   divPlayers = list_to_dict( player_stats )

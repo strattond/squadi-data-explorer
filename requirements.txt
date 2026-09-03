@@ -2,3 +2,5 @@ matplotlib
 playwright
 pytest-playwright
 tqdm
+streamlit
+streamlit-aggrid

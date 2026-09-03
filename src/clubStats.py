@@ -101,30 +101,29 @@ parser.add_argument( "--year", help="The competition year of interest", type=int
 args = parser.parse_args()
 
 print( "Loading configuration" )
-configData = shared.loadJson( 'data', 'config.json' )
-if configData is None:
+config: list[ shared.ConfigEntry ] = shared.loadConfig()
+if len( config ) == 0:
   print( "Please provide a valid configuration file" )
   sys.exit( 1 )
-config = [ shared.from_dict( data.ConfigEntry, d ) for d in configData ] if configData else []
 
 print( f"Starting our squadi stats processing for year {args.year}" )
 
 ladder: list[ data.Ladder ] = []
 prevLadder: list[ data.Ladder ] = []
 
-configMatch = data.getMatchingConfig( args.year, config )
-outputBase, plotBase = data.getPaths( configMatch )
+configMatch = shared.getMatchingConfig( args.year, config )
+outputBase, plotBase = shared.getPaths( configMatch )
 
-prevYearConfig = data.getMatchingConfig( args.year - 1, config )
+prevYearConfig = shared.getMatchingConfig( args.year - 1, config )
 if prevYearConfig is None:
   print( "Skipping Year on Year, no data" )
   unfilteredSquadiData = blended.SquadiDetails()
   unfiltCombSquadiData = data.SquadiDetails()
 else:
   print( "Loading prev year data" )
-  prevOutputBase, prevPlotBase = data.getPaths( prevYearConfig )
-  unfiltCombSquadiData = data.loadSquadiDetails( prevOutputBase, 'matchDetails.json', 'userMatchDetails.json' )
-  unfilteredSquadiData = blended.blendSquadiDetails( unfiltCombSquadiData.fixedD, unfiltCombSquadiData.userD )
+  prevOutputBase, prevPlotBase = shared.getPaths( prevYearConfig )
+  unfiltCombSquadiData = data.loadSquadiDetails( prevOutputBase, 'matchDetails.json', 'userMatchDetails.json', 'results.json' )
+  unfilteredSquadiData = blended.blendSquadiDetails( unfiltCombSquadiData )
   prevLadder = data.loadLadder( prevOutputBase, 'ladder.json' )
 
 outputFolder = Path( outputBase )
@@ -135,12 +134,12 @@ if not outputFolder.exists():
 data.makeIfMissing( plotBase )
 
 print( "Loading data" )
-combSquadiData = data.loadSquadiDetails( outputBase, 'matchDetails.json', 'userMatchDetails.json' )
+combSquadiData = data.loadSquadiDetails( outputBase, 'matchDetails.json', 'userMatchDetails.json', 'results.json' )
 if combSquadiData.fixedFound is False:
   print( "No match data available" )
   sys.exit( 1 )
 
-squadiData = blended.blendSquadiDetails( combSquadiData.fixedD, combSquadiData.userD )
+squadiData = blended.blendSquadiDetails( combSquadiData )
 
 ladder = data.loadLadder( outputBase, 'ladder.json' )
 
@@ -231,7 +230,7 @@ for div in divisions:
   playerNames = [ p[ 0 ] for p in sortedDivPlayers ]
 
   print( "   .. Player Matrix" )
-  divDetail = data.getDivByName( squadiData.data, div )
+  divDetail = blended.getDivByName( squadiData.data, div )
   if divDetail is not None:
     numRounds = len( divDetail.matches )
     playerMatrix = calcAppearanceMatrix( sortedDivPlayers, divDetail )
@@ -255,7 +254,7 @@ for div in divisions:
 
   if prevYearConfig is not None and unfiltCombSquadiData.fixedFound and prevLadder is not None and prev_player_stats is not None:
     print( "   .. Year on Year" )
-    prevYearDiv = data.getDivByName( prevYearSquadiData.data, div )
+    prevYearDiv = blended.getDivByName( prevYearSquadiData.data, div )
     if prevYearDiv is not None:
       prevSortedDivPlayers = data.getPlayersForDiv( prev_player_stats, div )
       prevSortedDivPlayers = sorted( prevSortedDivPlayers, key=lambda item: item[ 0 ] )
