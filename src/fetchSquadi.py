@@ -303,19 +303,26 @@ def calculateCards( cards ):
   return ( yellows, reds )
 
 
+def sumGoals( playerGoals ):
+  if ( playerGoals is None or len( playerGoals ) == 0 ):
+    return 0
+  # 'G' for normal goals, 'PG' for Penalty Goals ... so we have to sum them
+  return sum( goal[ "count" ] for goal in playerGoals )
+
+
 def processFetchedMatchDetails( matchId, teamOfInterest, existing: list[ FixtureWrapper ], json, startTime ):
   global anyFetched
-  toAdd = FixtureWrapper(
-      match=Fixture( id=matchId, date=noDelimTime( localTime( parseDateTime( startTime ) ) ) )
-  )
+  toAdd = FixtureWrapper( match=Fixture( id=matchId, date=noDelimTime( localTime( parseDateTime( startTime ) ) ) ) )
   for player in json[ 'playing' ]:
     if player[ 'teamId' ] == teamOfInterest:
       # Got a player to add!
       yellows, reds = calculateCards( player[ 'cards' ] )
+      if ( player[ 'firstName' ] == 'Pascal' ):
+        print( player )
       newPlayer = Player(
           shirt=int( player[ 'shirt' ] ),
           name=player[ 'firstName' ] + " " + player[ 'lastName' ],
-          goals=player[ 'goals' ][ 0 ][ 'count' ] if len( player[ 'goals' ] ) > 0 else 0,
+          goals=sumGoals( player[ 'goals' ] ),
           yellows=yellows,
           reds=reds
       )
