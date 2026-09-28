@@ -9,7 +9,7 @@ import shared
 class Player:
   name: str
   started: bool
-  position: str
+  position: str | None
 
 
 @dataclass
