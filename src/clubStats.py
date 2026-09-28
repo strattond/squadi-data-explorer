@@ -5,11 +5,9 @@ from pathlib import Path
 
 import numpy as np
 
-import blended
-import data
-import shared
-from charting import drawColourChart, plotRowData, plotStatsData
-from stats import (
+from squadi_data import blended, data, shared
+from squadi_data.charting import drawColourChart, plotRowData, plotStatsData
+from squadi_data.stats import (
     accumulatePlayersStats,
     getInfographicData,
     getTeamInfographicData,

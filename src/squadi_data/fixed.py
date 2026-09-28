@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import shared
+from . import shared
 
 
 def loadDivisionData( baseFolder, filename ) -> tuple[ bool, SquadiDetails ]:
@@ -43,5 +43,4 @@ class DivisionData:
 @dataclass
 class SquadiDetails:
   data: list[ DivisionData ] = field( default_factory=list )
-
 

@@ -2,10 +2,10 @@ import re
 
 import numpy as np
 
-import blended
-import fixed
-import user
-from data import (
+from . import blended
+from . import fixed
+from . import user
+from .data import (
     InfoStats,
     Ladder,
     Player,

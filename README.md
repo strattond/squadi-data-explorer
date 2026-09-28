@@ -12,12 +12,12 @@ Explores the Squadi football registration site
 
 Clone the github repository as you ordinarily would.
 
-Create the virtual environment it will run under, then sync the packages e.g. 
+Create the virtual environment it will run under, then install the application extras:
 
 ```
 uv venv
 ./.venv/Scripts/activate.ps1
-uv sync
+uv sync --extra fetch --extra stats --extra editor
 ```
 
 And ensure that you install the playwright browsers before attempting to run the program.
@@ -71,3 +71,34 @@ To generate statistics and plots from the data
 ```
 python .\src\clubStats.py --year 8
 ```
+
+## Reusing the data library
+
+The `squadi_data` package contains the persisted models, JSON loaders, blending helpers, and statistics functions. Install this repository into another local uv project as an editable dependency by adding the following to that project's `pyproject.toml`:
+
+```toml
+[project]
+dependencies = [
+  "squadi-data-explorer",
+]
+
+[tool.uv.sources]
+squadi-data-explorer = { path = "../github/squadi-data-explorer", editable = true }
+```
+
+Adjust the relative path to this checkout, then run `uv sync`. The core library requires NumPy; install this project's `fetch`, `stats`, or `editor` extras only when using those features.
+
+Load the cached season data by passing the year-specific output directory:
+
+```python
+from pathlib import Path
+from squadi_data import blend_season, load_season
+
+season = load_season( Path( "D:/Projects/github/squadi-data-explorer/output/8" ) )
+blended_season = blend_season( season )
+for division in blended_season.data:
+  for fixture in division.matches:
+    print( division.div.name, fixture.match.id, len( fixture.match.players ) )
+```
+
+`load_season` reads `matchDetails.json`, `userMatchDetails.json`, and `results.json` from the given directory. For ladder data, use `squadi_data.data.loadLadder(output_dir, "ladder.json")`. Fetching and chart generation remain command-line workflows in this repository; run the fetch commands from this repository root to use its `data/config.json` and year-specific `output/` paths.

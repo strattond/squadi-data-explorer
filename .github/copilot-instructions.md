@@ -2,7 +2,7 @@
 
 ## Project overview
 
-This is a Python 3.13 project for collecting and analysing football registration data from Squadi. It has three user-facing flows:
+This is a Python 3.13 project for collecting and analysing football registration data from Squadi. The reusable library lives in `src/squadi_data/`; fetch, statistics, and editor scripts live in `src/`. It has three user-facing flows:
 
 - `src/fetchSquadi.py` uses Playwright to load Squadi pages, intercept the relevant API responses, and cache normalized JSON under `output/<yearId>/`.
 - `src/clubStats.py` loads the cached data, calculates player/team statistics, and writes PNG charts plus JSON summaries under `plots/<yearId>/` and `output/<yearId>/`.
@@ -28,11 +28,13 @@ uv venv
 playwright install
 ```
 
-The repository declares packages in `requirements.txt`, but has no `pyproject.toml` or `uv.lock`; `uv sync` therefore does not have a project manifest to sync. Install the declared requirements into the active environment:
+Install the app's optional dependencies with:
 
 ```powershell
-uv pip install -r requirements.txt
+uv sync --extra fetch --extra stats --extra editor
 ```
+
+`requirements.txt` remains available for non-uv installs.
 
 Run these standalone scripts from the repository root; `--year` must match a `yearId` in `data/config.json`. Fetch the season summary first, because match-detail mode reads the cached ladder and results:
 
@@ -76,12 +78,13 @@ yapf --recursive --in-place .\src
 
 The fetcher writes cached files such as `ladder.json`, `results.json`, `next.json`, `recent.json`, `matchDetails.json`, `userMatchDetails.json`, and optionally `divMatchDetails.json` below the year-specific output directory. Statistics writes `stats.json`, `diff.json`, and generated plots. These files are the pipeline’s interchange format; preserve field names and dataclass shapes when changing models.
 
-Most code assumes it is launched from the repository root and uses relative paths. Keep that working-directory contract when adding commands or tests. `output/`, virtual environments, caches, and Streamlit secrets are ignored by Git; do not add generated fetch results or local secrets to commits.
+The fetch, statistics, and editor workflows assume they are launched from the repository root and use its relative paths. The reusable `squadi_data.load_season` API instead takes an explicit year-specific output directory. Preserve both contracts. `output/`, virtual environments, caches, and Streamlit secrets are ignored by Git; do not add generated fetch results or local secrets to commits.
 
 ## Code conventions specific to this repository
 
 - Match the existing YAPF style: two-space indentation, spaces inside brackets, and the spacing shown in `setup.cfg`. Keep imports compatible with scripts being launched directly from `src/`.
 - Use the existing dataclasses and `shared.from_dict`/`data.default` serialization path for persisted data rather than introducing a second JSON schema or ad-hoc dictionaries.
+- The reusable package API is `squadi_data.load_season(output_dir)` and `squadi_data.blend_season(season)`. Keep package imports side-effect free; the root-level fetch/statistics/editor scripts are command-line/UI entry points.
 - Preserve the source/blended boundary. Add source-specific fields to `fixed.py` or `user.py`; add cross-source joins and presentation-facing fields to `blended.py`; keep aggregate calculations in `stats.py` or `data.py`.
 - Fetch/cache lookups identify divisions by `divisionId`; blending currently matches divisions by name, matches by Squadi match ID, and players by exact name. Preserve these keys when changing the joins. User-facing sorting and selection use the division name.
 - Statistics use NumPy arrays with `NaN` to represent a round where a player has no data. Use the existing `maskedSum`, `np.nansum`, and cumulative-stat patterns so missing rounds are not treated as appearances.

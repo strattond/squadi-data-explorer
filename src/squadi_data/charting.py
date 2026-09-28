@@ -2,9 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-import blended
-from data import Player
-from stats import maxMatches
+from . import blended
+from .data import Player
+from .stats import maxMatches
 
 
 def figure_for_resolution( width_px, height_px, dpi=100 ):

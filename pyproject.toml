@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "squadi-data-explorer"
+version = "0.1.0"
+description = "Fetch and analyze Squadi football registration data"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=2.0",
+]
+
+[project.optional-dependencies]
+fetch = [
+  "playwright",
+  "tqdm",
+]
+stats = [
+  "matplotlib",
+  "Pillow",
+]
+editor = [
+  "pandas",
+  "streamlit",
+  "streamlit-aggrid",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["squadi_data*"]

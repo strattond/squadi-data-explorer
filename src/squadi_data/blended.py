@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import data
-import fixed
-import shared
-import user
+from . import data
+from . import fixed
+from . import shared
+from . import user
 
 
 @dataclass
@@ -16,7 +16,7 @@ class Player:
   yellows: int
   reds: int
   started: bool = False
-  position: str = ""
+  position: str | None = ""
 
 
 @dataclass

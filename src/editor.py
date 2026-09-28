@@ -9,11 +9,8 @@ import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, ColumnsAutoSizeMode, GridOptionsBuilder
 
-import blended
-import data
-import shared
-import user
-from stats import sortedDivisions
+from squadi_data import blended, data, shared, user
+from squadi_data.stats import sortedDivisions
 
 
 @st.cache_data

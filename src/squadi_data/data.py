@@ -10,9 +10,9 @@ from pathlib import Path
 import numpy as np
 from numpy import ndarray
 
-import fixed as fx
-import shared
-import user
+from . import fixed as fx
+from . import shared
+from . import user
 
 pattern = re.compile( r" Div \d{1,2} (Sth|Central|Nth) Men" )
 

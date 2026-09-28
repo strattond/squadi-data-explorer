@@ -8,9 +8,8 @@ from pathlib import Path
 from playwright.sync_api import Browser, Page, Response, sync_playwright
 from tqdm import tqdm
 
-import data
-import shared
-from fixed import DivisionData, Fixture, FixtureWrapper, Player, SquadiDetails
+from squadi_data import data, shared
+from squadi_data.fixed import DivisionData, Fixture, FixtureWrapper, Player, SquadiDetails
 
 parser = argparse.ArgumentParser(
     prog="Squadi Parser", description="Parses data from squadi into JSON format for further processing"
